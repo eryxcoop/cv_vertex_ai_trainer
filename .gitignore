@@ -1,0 +1,5 @@
+venv
+.idea
+cv-vertex-ai-trainer.iml
+build
+cv_vertex_ai_trainer.egg-info
