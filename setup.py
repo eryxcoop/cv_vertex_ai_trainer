@@ -16,6 +16,7 @@ setup(
     author="Eryx",
     version="0.0.1",
     packages=find_packages(),
+    package_data={"cv-vertex-ai-trainer": ["config_example.toml"]},
     entry_points={"console_scripts": ["cv-vertex-ai-trainer=src.cli:main"]},
     install_requires=requirements,
     python_requires=">=3.10",

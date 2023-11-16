@@ -1,0 +1,16 @@
+[google_cloud]
+project = "project-name"
+bucket = "bucket-name"
+
+[vertex_ai_machine_config]
+machine_type = "n1-standard-4" # The type of machine to use. Refer to: https://cloud.google.com/vertex-ai/docs/training/configure-compute#machine-types
+accelerator_type = "NVIDIA_TESLA_T4" # The type of accelerator to use. Refer to: https://cloud.google.com/vertex-ai/docs/reference/rest/v1/MachineSpec#acceleratortype
+accelerator_count = 1 # number of accelerators
+
+[label_studio]
+project_url = "project-url"
+token = "token"
+
+[traning]
+number_of_folds = 5
+number_of_epochs = 300
