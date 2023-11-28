@@ -34,24 +34,22 @@ class TrainingScript:
             self.dataset_path / f"{datetime.date.today().isoformat()}_{self.number_folds}-Fold_Cross-val")
         self.accelerator_count = int(os.environ["ACCELERATOR_COUNT"])
         self.rank = os.environ["RANK"]
+        self.training_results_path = self.save_path / "training_results"
+        self.fold_datasets_path = self.save_path / "folds_datasets"
 
     def run(self):
-
-        logging.info(f"Environment variables: {os.environ}")
         self._check_if_gpu_is_available()
         self._prevent_multi_gpu_training()
 
         folds_yamls = self._prepare_dataset()
 
         for k in range(self.number_folds):
-            dataset_yaml = folds_yamls[k]
-            model = self.train_model_fold(dataset_yaml)
+            model = self.train_model_fold(folds_yamls, k)
             self.save_model_metrics(k, model)
 
         self.export_results()
 
     def export_results(self):
-        os.system(f'gsutil -m cp -r "{self.base_path}/runs" "{self.bucket_path}"')
         os.system(f'gsutil -m cp -r "{self.save_path}" "{self.bucket_path}"')
 
     def save_model_metrics(self, k, model):
@@ -64,11 +62,10 @@ class TrainingScript:
                 "map50-95": metrics.maps,
             }
         )
-        results.to_csv(f"{self.save_path}/fold_{k + 1}/metrics.csv")
-        os.system(
-            f'gsutil -m cp "{self.save_path}/fold_{k + 1}/metrics.csv" "{self.bucket_path}/fold_{k + 1}_metrics.csv"')
+        results.to_csv(f"{self.training_results_path}/{self._fold_name(k)}/metrics.csv")
 
-    def train_model_fold(self, dataset_yaml):
+    def train_model_fold(self, folds_yamls, k):
+        dataset_yaml = folds_yamls[k]
         augmentations = self._augmentations()
         model = YOLO(self.model)
         model.train(
@@ -77,6 +74,8 @@ class TrainingScript:
             imgsz=self.image_size,
             rect=(self.image_size[0] != self.image_size[1]),
             device="0",
+            project=str(self.training_results_path),
+            name=self._fold_name(k),
             **augmentations,
         )
         return model
@@ -118,6 +117,7 @@ class TrainingScript:
             "val": f"{self.base_path}/dataset/val",
         }
 
+        # TODO: refactor this, use the dataset path variable
         yaml_file_path = "dataset/data.yaml"
 
         with open(yaml_file_path, "w") as yaml_file:
@@ -148,25 +148,25 @@ class TrainingScript:
 
         folds_indices = list(k_fold_generator.split(labels_per_image))
 
-        folds = [f"fold_{n}" for n in range(1, self.number_folds + 1)]
+        folds = [self._fold_name(n) for n in range(self.number_folds)]
         folds_df = pd.DataFrame(index=file_names, columns=folds)
 
-        for index, (train, val) in enumerate(folds_indices, start=1):
-            folds_df[f"fold_{index}"].loc[labels_per_image.iloc[train].index] = "train"
-            folds_df[f"fold_{index}"].loc[labels_per_image.iloc[val].index] = "val"
+        for index, (train, val) in enumerate(folds_indices):
+            folds_df[self._fold_name(index)].loc[labels_per_image.iloc[train].index] = "train"
+            folds_df[self._fold_name(index)].loc[labels_per_image.iloc[val].index] = "val"
 
         fold_label_distribution = pd.DataFrame(index=folds, columns=class_indices)
 
-        for n, (train_indices, val_indices) in enumerate(folds_indices, start=1):
+        for n, (train_indices, val_indices) in enumerate(folds_indices):
             train_totals = labels_per_image.iloc[train_indices].sum()
             val_totals = labels_per_image.iloc[val_indices].sum()
             ratio = val_totals / (train_totals + 1e-7)
-            fold_label_distribution.loc[f"fold_{n}"] = ratio
+            fold_label_distribution.loc[self._fold_name(n)] = ratio
 
         folds_yamls = []
 
         for fold in folds_df.columns:
-            fold_dir = self.save_path / fold
+            fold_dir = self.fold_datasets_path / fold
             fold_dir.mkdir(parents=True, exist_ok=True)
             (fold_dir / "train" / "images").mkdir(parents=True, exist_ok=True)
             (fold_dir / "train" / "labels").mkdir(parents=True, exist_ok=True)
@@ -188,13 +188,12 @@ class TrainingScript:
                 )
 
         for image, label in zip(images, labels):
-            for fold, k_fold in folds_df.loc[image.stem].items():
-                shutil.copy(image, self.save_path / fold / k_fold / "images" / image.name)
-                shutil.copy(label, self.save_path / fold / k_fold / "labels" / label.name)
+            for fold, train_or_val in folds_df.loc[image.stem].items():
+                shutil.copy(image, self.fold_datasets_path / fold / train_or_val / "images" / image.name)
+                shutil.copy(label, self.fold_datasets_path / fold / train_or_val / "labels" / label.name)
 
-        folds_df.to_csv(self.save_path / "kfold_datasplit.csv")
-        os.system(f'gsutil -m cp "{self.save_path}/kfold_datasplit.csv" "{self.bucket_path}/kfold_datasplit.csv"')
-        fold_label_distribution.to_csv(self.save_path / "kfold_label_distribution.csv")
+        folds_df.to_csv(self.fold_datasets_path / "kfold_datasplit.csv")
+        fold_label_distribution.to_csv(self.fold_datasets_path / "kfold_label_distribution.csv")
 
         return folds_yamls
 
@@ -210,6 +209,9 @@ class TrainingScript:
         if self.accelerator_count > 0 and not gpu_available:
             logging.error(f"GPU is not available, accelerator count: {self.accelerator_count}")
             exit(1)
+
+    def _fold_name(self, k):
+        return f"fold_{k + 1}"
 
 
 if __name__ == "__main__":
