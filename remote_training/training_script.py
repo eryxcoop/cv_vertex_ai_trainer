@@ -44,15 +44,15 @@ class TrainingScript:
         folds_yamls = self._prepare_dataset()
 
         for k in range(self.number_folds):
-            model = self.train_model_fold(folds_yamls, k)
-            self.save_model_metrics(k, model)
+            model = self._train_model_fold(folds_yamls, k)
+            self._save_model_metrics(k, model)
 
-        self.export_results()
+        self._export_results()
 
-    def export_results(self):
+    def _export_results(self):
         os.system(f'gsutil -m cp -r "{self.save_path}" "{self.bucket_path}"')
 
-    def save_model_metrics(self, k, model):
+    def _save_model_metrics(self, k, model):
         metrics = model.metrics.box
         results = pd.DataFrame(
             {
@@ -64,7 +64,7 @@ class TrainingScript:
         )
         results.to_csv(f"{self.training_results_path}/{self._fold_name(k)}/metrics.csv")
 
-    def train_model_fold(self, folds_yamls, k):
+    def _train_model_fold(self, folds_yamls, k):
         dataset_yaml = folds_yamls[k]
         augmentations = self._augmentations()
         model = YOLO(self.model)
@@ -99,72 +99,36 @@ class TrainingScript:
         return augmentations
 
     def _prepare_dataset(self):
-        self.save_path.mkdir(parents=True, exist_ok=True)
-        os.system("mkdir dataset")
-        os.system(f'gsutil -m cp -r "{self.images_bucket_path}" dataset')
-        os.system(
-            f"curl -X GET {self.label_studio_project_url}/export\?exportType\=YOLO -H 'Authorization: Token {self.label_studio_token}' --output 'annotations.zip'"
-        )
-        os.system("unzip annotations -d dataset")
+        class_names, images, annotations = self._download_dataset()
+        folds_yamls = self.create_k_folds(annotations, class_names, images)
+        return folds_yamls
 
-        with open("dataset/classes.txt", "r") as f:
-            class_names = f.read().splitlines()
-
-        data = {
-            "names": class_names,
-            "nc": len(class_names),
-            "train": f"{self.base_path}/dataset/train",
-            "val": f"{self.base_path}/dataset/val",
-        }
-
-        # TODO: refactor this, use the dataset path variable
-        yaml_file_path = "dataset/data.yaml"
-
-        with open(yaml_file_path, "w") as yaml_file:
-            yaml.dump(data, yaml_file, default_flow_style=False)
-
-        labels = sorted(self.dataset_path.rglob("*labels/*.txt"))
-
-        images = []
-        for extension in [".jpg", ".jpeg", ".png"]:
-            images.extend(sorted((self.dataset_path / "images").rglob(f"*{extension}")))
-
-        file_names = [l.stem for l in labels]
+    def create_k_folds(self, annotations, class_names, images):
+        file_names = [annotation.stem for annotation in annotations]
         class_indices = list(range(len(class_names)))
-
         labels_per_image = pd.DataFrame([], columns=class_indices, index=file_names)
-
-        for label in labels:
+        for label in annotations:
             label_counter = Counter()
             with open(label, "r") as lf:
                 lines = lf.readlines()
             for line in lines:
                 label_counter[int(line.split(" ")[0])] += 1
             labels_per_image.loc[label.stem] = label_counter
-
         labels_per_image = labels_per_image.fillna(0.0)
-
         k_fold_generator = KFold(n_splits=self.number_folds, shuffle=True, random_state=20)
-
         folds_indices = list(k_fold_generator.split(labels_per_image))
-
         folds = [self._fold_name(n) for n in range(self.number_folds)]
         folds_df = pd.DataFrame(index=file_names, columns=folds)
-
         for index, (train, val) in enumerate(folds_indices):
             folds_df[self._fold_name(index)].loc[labels_per_image.iloc[train].index] = "train"
             folds_df[self._fold_name(index)].loc[labels_per_image.iloc[val].index] = "val"
-
         fold_label_distribution = pd.DataFrame(index=folds, columns=class_indices)
-
         for n, (train_indices, val_indices) in enumerate(folds_indices):
             train_totals = labels_per_image.iloc[train_indices].sum()
             val_totals = labels_per_image.iloc[val_indices].sum()
             ratio = val_totals / (train_totals + 1e-7)
             fold_label_distribution.loc[self._fold_name(n)] = ratio
-
         folds_yamls = []
-
         for fold in folds_df.columns:
             fold_dir = self.fold_datasets_path / fold
             fold_dir.mkdir(parents=True, exist_ok=True)
@@ -186,16 +150,38 @@ class TrainingScript:
                     },
                     ds_y,
                 )
-
-        for image, label in zip(images, labels):
+        for image, label in zip(images, annotations):
             for fold, train_or_val in folds_df.loc[image.stem].items():
                 shutil.copy(image, self.fold_datasets_path / fold / train_or_val / "images" / image.name)
                 shutil.copy(label, self.fold_datasets_path / fold / train_or_val / "labels" / label.name)
-
         folds_df.to_csv(self.fold_datasets_path / "kfold_datasplit.csv")
         fold_label_distribution.to_csv(self.fold_datasets_path / "kfold_label_distribution.csv")
-
         return folds_yamls
+
+    def _download_dataset(self):
+        self.save_path.mkdir(parents=True, exist_ok=True)
+        os.system(f"mkdir {str(self.dataset_path)}")
+        os.system(f'gsutil -m cp -r "{self.images_bucket_path}" {str(self.dataset_path)}')
+        os.system(
+            f"curl -X GET {self.label_studio_project_url}/export\?exportType\=YOLO -H 'Authorization: Token {self.label_studio_token}' --output 'annotations.zip'"
+        )
+        os.system(f"unzip annotations -d {str(self.dataset_path)}")
+        with open(f"{self.dataset_path}/classes.txt", "r") as f:
+            class_names = f.read().splitlines()
+        yaml_data = {
+            "names": class_names,
+            "nc": len(class_names),
+            "train": f"{self.base_path}/{self.dataset_path}/train",
+            "val": f"{self.base_path}/{self.dataset_path}/val",
+        }
+        yaml_file_path = f"{self.dataset_path}/data.yaml"
+        with open(yaml_file_path, "w") as yaml_file:
+            yaml.dump(yaml_data, yaml_file, default_flow_style=False)
+        annotations = sorted(self.dataset_path.rglob("*labels/*.txt"))
+        images = []
+        for extension in [".jpg", ".jpeg", ".png"]:
+            images.extend(sorted((self.dataset_path / "images").rglob(f"*{extension}")))
+        return class_names, images, annotations
 
     def _prevent_multi_gpu_training(self):
         logging.info(f"Checking RANK: {self.rank}")
