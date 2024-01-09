@@ -1,9 +1,11 @@
 import argparse
+import os
 import textwrap
 from dataclasses import dataclass
 
 import toml
 
+from remote_training.training_script import TrainingScript
 from src.training_job import TrainingJob
 
 
@@ -24,20 +26,26 @@ class CLI:
             required=True,
             help="The path to the config file.",
         )
+        self.parser.add_argument(
+            '--local',
+            action=argparse.BooleanOptionalAction,
+            help="Run the trainer job in your local machine"
+        )
 
     def run(self):
         args = self.parser.parse_args()
         config = self._parse_toml(args.config)
         training_config = self._training_config(config)
-        train_job = TrainingJob(
-            gc_project=config["google_cloud"]["project"],
-            gc_bucket=config["google_cloud"]["bucket"],
-            machine_type=config["vertex_ai_machine_config"]["machine_type"],
-            accelerator_type=config["vertex_ai_machine_config"]["accelerator_type"],
-            accelerator_count=config["vertex_ai_machine_config"]["accelerator_count"],
-            training_config=training_config,
-        )
-        train_job.run()
+        if args.local:
+            print("\n-------------------------------\n")
+            print("Running in a local machine")
+            print("\n-------------------------------\n")
+            self._run_local(config, training_config)
+        else:
+            print("\n-------------------------------\n")
+            print("Running in a remote machine")
+            print("\n-------------------------------\n")
+            self._run_remote(config, training_config)
 
     def _show_config_example(self) -> str:
         toml_file_example = "config_example.toml"
@@ -60,6 +68,38 @@ class CLI:
             images_bucket_path=config["google_cloud"]["images_bucket"],
             bucket_path=config["google_cloud"]["bucket"],
         )
+
+    def _run_remote(self, config, training_config):
+        train_job = TrainingJob(
+            gc_project=config["google_cloud"]["project"],
+            gc_bucket=config["google_cloud"]["bucket"],
+            machine_type=config["vertex_ai_machine_config"]["machine_type"],
+            accelerator_type=config["vertex_ai_machine_config"]["accelerator_type"],
+            accelerator_count=config["vertex_ai_machine_config"]["accelerator_count"],
+            training_config=training_config,
+        )
+        train_job.run()
+
+    def _run_local(self, _config, training_config):
+        env_vars = self._load_environment_variables(training_config)
+        for key, value in env_vars.items():
+            os.environ[key] = str(value)
+
+        train_script = TrainingScript()
+        train_script.run()
+
+    def _load_environment_variables(self, training_config):
+        return {
+            "IMAGE_SIZE": str(training_config.image_size),
+            "EPOCHS": str(training_config.epochs),
+            "MODEL": str(training_config.model),
+            "LABEL_STUDIO_TOKEN": str(training_config.label_studio_token),
+            "LABEL_STUDIO_PROJECT_URL": str(training_config.label_studio_project_url),
+            "IMAGES_BUCKET_PATH": str(training_config.images_bucket_path),
+            "BUCKET_PATH": str(training_config.bucket_path),
+            "NUMBER_OF_FOLDS": str(training_config.number_of_folds),
+            "ACCELERATOR_COUNT": str(0),
+        }
 
 
 @dataclass

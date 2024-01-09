@@ -1,6 +1,4 @@
-import os
-
-from remote_training.training_script import TrainingScript
+from google.cloud import aiplatform
 
 
 class TrainingJob:
@@ -16,15 +14,23 @@ class TrainingJob:
         self.accelerator_count = accelerator_count
         self.training_config = training_config
 
-        env_vars = self._load_environment_variables()
+        aiplatform.init(project=self.gc_project, staging_bucket=self.gc_bucket)
 
-        for key, value in env_vars.items():
-            os.environ[key] = str(value)
-
-        self.job = TrainingScript()
+        self.job = aiplatform.CustomTrainingJob(
+            display_name=self.DEFAULT_JOB_NAME,
+            container_uri=self.CONTAINER_URI,
+            requirements=self._load_requirements(),
+            script_path="remote_training/training_script.py",
+        )
 
     def run(self):
-        self.job.run()
+        self.job.run(
+            replica_count=1,
+            machine_type=self.machine_type,
+            accelerator_type=self.accelerator_type,
+            accelerator_count=self.accelerator_count,
+            environment_variables=self._load_environment_variables()
+        )
 
     def _load_environment_variables(self):
         training_config = self.training_config
