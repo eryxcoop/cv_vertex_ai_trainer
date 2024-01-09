@@ -4,3 +4,7 @@ cv-vertex-ai-trainer.iml
 build
 cv_vertex_ai_trainer.egg-info
 /config.toml
+dataset/
+__pycache__/
+*.pt
+*.zip
