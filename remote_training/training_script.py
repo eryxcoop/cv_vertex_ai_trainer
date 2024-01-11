@@ -73,7 +73,7 @@ class TrainingScript:
             epochs=self.epochs,
             imgsz=self.image_size,
             rect=(self.image_size[0] != self.image_size[1]),
-            device="0",
+            device=self._get_device(),
             project=str(self.training_results_path),
             name=self._fold_name(k),
             **augmentations,
@@ -159,13 +159,13 @@ class TrainingScript:
         return folds_yamls
 
     def _download_dataset(self):
+        self.dataset_path.mkdir(parents=True, exist_ok=True)
         self.save_path.mkdir(parents=True, exist_ok=True)
-        os.system(f"mkdir {str(self.dataset_path)}")
         os.system(f'gsutil -m cp -r "{self.images_bucket_path}" {str(self.dataset_path)}')
         os.system(
             f"curl -X GET {self.label_studio_project_url}/export\?exportType\=YOLO -H 'Authorization: Token {self.label_studio_token}' --output 'annotations.zip'"
         )
-        os.system(f"unzip annotations -d {str(self.dataset_path)}")
+        os.system(f"unzip -o annotations -d {str(self.dataset_path)}")
         with open(f"{self.dataset_path}/classes.txt", "r") as f:
             class_names = f.read().splitlines()
         yaml_data = {
@@ -198,6 +198,9 @@ class TrainingScript:
 
     def _fold_name(self, k):
         return f"fold_{k + 1}"
+
+    def _get_device(self):
+        return '0' if self._check_if_gpu_is_available() else 'cpu'
 
 
 if __name__ == "__main__":
