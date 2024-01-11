@@ -5,7 +5,8 @@ class TrainingJob:
     DEFAULT_JOB_NAME = "cv-vertex-ai-trainer"
     CONTAINER_URI = "us-docker.pkg.dev/vertex-ai/training/pytorch-gpu.1-13.py310:latest"
 
-    def __init__(self, gc_project, gc_bucket, machine_type, accelerator_type, accelerator_count, training_config) -> None:
+    def __init__(self, gc_project, gc_bucket, machine_type, accelerator_type, accelerator_count,
+                 training_config) -> None:
         self.gc_project = gc_project
         self.gc_bucket = gc_bucket
         self.machine_type = machine_type
