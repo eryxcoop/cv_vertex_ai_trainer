@@ -1,10 +1,17 @@
+# Dev environment
 venv
 .idea
 cv-vertex-ai-trainer.iml
 build
 cv_vertex_ai_trainer.egg-info
-/config.toml
-dataset/
 __pycache__/
+
+# Local downloads
+dataset/
 *.pt
 *.zip
+
+# Config files
+config.toml
+local.toml
+remote.toml
