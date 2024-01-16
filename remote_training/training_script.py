@@ -195,6 +195,7 @@ class TrainingScript:
         if self.accelerator_count > 0 and not gpu_available:
             logging.error(f"GPU is not available, accelerator count: {self.accelerator_count}")
             exit(1)
+        return gpu_available
 
     def _fold_name(self, k):
         return f"fold_{k + 1}"

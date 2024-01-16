@@ -1,4 +1,7 @@
-.PHONY: pypi-clean pypi-deploy pypi-local-build
+.PHONY: pypi-clean pypi-deploy pypi-local-build local.run local.clean
+
+LOCAL_CONFIG_FILE := local.toml # Set here the name of your local config file
+PYTHONPATH := $(shell pwd)
 
 pypi-clean:
 	rm -rf build/ dist/ *.egg-info/
@@ -14,3 +17,11 @@ pypi-local-build:
 pypi-install-deps:
 	source venv/bin/activate
 	pip install twine
+
+local.run: local.clean
+	PYTHONPATH=${PYTHONPATH} python src/cli.py -c ${LOCAL_CONFIG_FILE} --local
+
+local.clean:
+	rm -rf dataset/
+	rm -f annotations.zip
+	rm -f yolov8n.pt
