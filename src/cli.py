@@ -67,6 +67,7 @@ class CLI:
             number_of_folds=config["training"]["number_of_folds"],
             images_bucket_path=config["google_cloud"]["images_bucket"],
             bucket_path=config["google_cloud"]["bucket"],
+            use_kfold=config["training"]["use_kfold"]
         )
 
     def _run_remote(self, config, training_config):
@@ -112,6 +113,7 @@ class TrainingConfig:
     images_bucket_path: str
     bucket_path: str
     number_of_folds: int
+    use_kfold: bool
 
 
 def main():

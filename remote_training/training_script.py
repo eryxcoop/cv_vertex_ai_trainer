@@ -36,6 +36,7 @@ class TrainingScript:
         self.rank = os.environ["RANK"]
         self.training_results_path = self.save_path / "training_results"
         self.fold_datasets_path = self.save_path / "folds_datasets"
+        self.use_kfold = bool(os.environ["USE_KFOLD"])
 
     def run(self):
         self._check_if_gpu_is_available()
@@ -100,8 +101,10 @@ class TrainingScript:
 
     def _prepare_dataset(self):
         class_names, images, annotations = self._download_dataset()
-        folds_yamls = self.create_k_folds(annotations, class_names, images)
-        return folds_yamls
+        if self.use_kfold:
+            folds_yamls = self.create_k_folds(annotations, class_names, images)
+            return folds_yamls
+        return
 
     def create_k_folds(self, annotations, class_names, images):
         file_names = [annotation.stem for annotation in annotations]
