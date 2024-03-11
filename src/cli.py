@@ -99,6 +99,7 @@ class CLI:
             "IMAGES_BUCKET_PATH": str(training_config.images_bucket_path),
             "BUCKET_PATH": str(training_config.bucket_path),
             "NUMBER_OF_FOLDS": str(training_config.number_of_folds),
+            "USE_KFOLD": int(training_config.use_kfold),
             "ACCELERATOR_COUNT": str(0),
         }
 

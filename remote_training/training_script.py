@@ -36,24 +36,27 @@ class TrainingScript:
         self.rank = os.environ["RANK"]
         self.training_results_path = self.save_path / "training_results"
         self.fold_datasets_path = self.save_path / "folds_datasets"
-        self.use_kfold = bool(os.environ["USE_KFOLD"])
+        self.single_dataset_path = self.save_path / "single_dataset"
+        self.use_kfold = bool(int(os.environ["USE_KFOLD"]))
 
     def run(self):
         self._check_if_gpu_is_available()
         self._prevent_multi_gpu_training()
 
-        folds_yamls = self._prepare_dataset()
+        dataset_yaml_list = self._prepare_dataset()
 
-        for k in range(self.number_folds):
-            model = self._train_model_fold(folds_yamls, k)
-            self._save_model_metrics(k, model)
+        for k in range(len(dataset_yaml_list)):
+            dataset_yaml = dataset_yaml_list[k]
+            model_name = self._fold_name(k) if self.use_kfold else "single_model"
+            model = self._train_model(dataset_yaml, model_name)
+            self._save_model_metrics(model_name, model)
 
         self._export_results()
 
     def _export_results(self):
         os.system(f'gsutil -m cp -r "{self.save_path}" "{self.bucket_path}"')
 
-    def _save_model_metrics(self, k, model):
+    def _save_model_metrics(self, fold_name, model):
         metrics = model.metrics.box
         results = pd.DataFrame(
             {
@@ -63,10 +66,9 @@ class TrainingScript:
                 "map50-95": metrics.maps,
             }
         )
-        results.to_csv(f"{self.training_results_path}/{self._fold_name(k)}/metrics.csv")
+        results.to_csv(f"{self.training_results_path}/{fold_name}/metrics.csv")
 
-    def _train_model_fold(self, folds_yamls, k):
-        dataset_yaml = folds_yamls[k]
+    def _train_model(self, dataset_yaml, model_name):
         augmentations = self._augmentations()
         model = YOLO(self.model)
         model.train(
@@ -76,7 +78,7 @@ class TrainingScript:
             rect=(self.image_size[0] != self.image_size[1]),
             device=self._get_device(),
             project=str(self.training_results_path),
-            name=self._fold_name(k),
+            name=model_name,
             **augmentations,
         )
         return model
@@ -102,11 +104,11 @@ class TrainingScript:
     def _prepare_dataset(self):
         class_names, images, annotations = self._download_dataset()
         if self.use_kfold:
-            folds_yamls = self.create_k_folds(annotations, class_names, images)
-            return folds_yamls
-        return
+            return self._create_k_folds(annotations, class_names, images, self.fold_datasets_path)
+        else:
+            return self._create_single_dataset(annotations, class_names, images, self.single_dataset_path)
 
-    def create_k_folds(self, annotations, class_names, images):
+    def _create_k_folds(self, annotations, class_names, images, datasets_path):
         file_names = [annotation.stem for annotation in annotations]
         class_indices = list(range(len(class_names)))
         labels_per_image = pd.DataFrame([], columns=class_indices, index=file_names)
@@ -133,7 +135,7 @@ class TrainingScript:
             fold_label_distribution.loc[self._fold_name(n)] = ratio
         folds_yamls = []
         for fold in folds_df.columns:
-            fold_dir = self.fold_datasets_path / fold
+            fold_dir = datasets_path / fold
             fold_dir.mkdir(parents=True, exist_ok=True)
             (fold_dir / "train" / "images").mkdir(parents=True, exist_ok=True)
             (fold_dir / "train" / "labels").mkdir(parents=True, exist_ok=True)
@@ -155,11 +157,42 @@ class TrainingScript:
                 )
         for image, label in zip(images, annotations):
             for fold, train_or_val in folds_df.loc[image.stem].items():
-                shutil.copy(image, self.fold_datasets_path / fold / train_or_val / "images" / image.name)
-                shutil.copy(label, self.fold_datasets_path / fold / train_or_val / "labels" / label.name)
-        folds_df.to_csv(self.fold_datasets_path / "kfold_datasplit.csv")
-        fold_label_distribution.to_csv(self.fold_datasets_path / "kfold_label_distribution.csv")
+                shutil.copy(image, datasets_path / fold / train_or_val / "images" / image.name)
+                shutil.copy(label, datasets_path / fold / train_or_val / "labels" / label.name)
+        folds_df.to_csv(datasets_path / "kfold_datasplit.csv")
+        fold_label_distribution.to_csv(datasets_path / "kfold_label_distribution.csv")
         return folds_yamls
+
+    def _create_single_dataset(self, annotations, class_names, images, datasets_path):
+        folder_name = 'single_dataset'
+        model_info_dir = datasets_path / folder_name
+        model_info_dir.mkdir(parents=True, exist_ok=True)
+        (model_info_dir / "train" / "images").mkdir(parents=True, exist_ok=True)
+        (model_info_dir / "train" / "labels").mkdir(parents=True, exist_ok=True)
+        (model_info_dir / "val" / "images").mkdir(parents=True, exist_ok=True)
+        (model_info_dir / "val" / "labels").mkdir(parents=True, exist_ok=True)
+
+        dataset_yaml = model_info_dir / f"dataset.yaml"
+
+        with open(dataset_yaml, "w") as ds_y:
+            yaml.safe_dump(
+                {
+                    "path": f"{self.base_path}/{model_info_dir.as_posix()}",
+                    "train": "train",
+                    "val": "val",
+                    "names": class_names,
+                },
+                ds_y,
+            )
+        for image, label in zip(images, annotations):
+            shutil.copy(image, datasets_path / folder_name / 'train' / "images" / image.name)
+            shutil.copy(label, datasets_path / folder_name / 'train' / "labels" / label.name)
+
+        first_image = images[0]
+        first_label = annotations[0]
+        shutil.copy(first_image, datasets_path / folder_name / 'val' / "images" / first_image.name)
+        shutil.copy(first_label, datasets_path / folder_name / 'val' / "labels" / first_label.name)
+        return [dataset_yaml]
 
     def _download_dataset(self):
         self.dataset_path.mkdir(parents=True, exist_ok=True)
