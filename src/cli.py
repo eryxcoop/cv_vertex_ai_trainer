@@ -82,14 +82,14 @@ class CLI:
         train_job.run()
 
     def _run_local(self, _config, training_config):
-        env_vars = self._load_environment_variables(training_config)
+        env_vars = self._load_environment_variables_for_local_run(training_config)
         for key, value in env_vars.items():
             os.environ[key] = str(value)
 
         train_script = TrainingScript()
         train_script.run()
 
-    def _load_environment_variables(self, training_config):
+    def _load_environment_variables_for_local_run(self, training_config):
         return {
             "IMAGE_SIZE": str(training_config.image_size),
             "EPOCHS": str(training_config.epochs),
