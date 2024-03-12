@@ -1,12 +1,6 @@
+import datetime
 import logging
 import os
-
-# This is a workaround to avoid Ultralytics trying to do multi-gpu training. Despite trying to set it as
-# an env var, it still tries to do multi-gpu training. This is a workaround to avoid that.
-# It's necessary to do this before importing ultralytics
-os.environ["RANK"] = "-1"
-
-import datetime
 import shutil
 from collections import Counter
 from pathlib import Path
@@ -16,6 +10,11 @@ import torch
 import yaml
 from sklearn.model_selection import KFold
 from ultralytics import YOLO
+
+# This is a workaround to avoid Ultralytics trying to do multi-gpu training. Despite trying to set it as
+# an env var, it still tries to do multi-gpu training. This is a workaround to avoid that.
+# It's necessary to do this before importing ultralytics
+os.environ["RANK"] = "-1"
 
 
 class TrainingScript:
