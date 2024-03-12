@@ -67,7 +67,8 @@ class CLI:
             number_of_folds=config["training"]["number_of_folds"],
             images_bucket_path=config["google_cloud"]["images_bucket"],
             bucket_path=config["google_cloud"]["bucket"],
-            use_kfold=config["training"]["use_kfold"]
+            use_kfold=config["training"]["use_kfold"],
+            accelerator_count=config["vertex_ai_machine_config"]["accelerator_count"]
         )
 
     def _run_remote(self, config, training_config):
@@ -82,14 +83,14 @@ class CLI:
         train_job.run()
 
     def _run_local(self, _config, training_config):
-        env_vars = self._load_environment_variables_for_local_run(training_config)
+        env_vars = self._load_environment_variables(training_config)
         for key, value in env_vars.items():
             os.environ[key] = str(value)
 
         train_script = TrainingScript()
         train_script.run()
 
-    def _load_environment_variables_for_local_run(self, training_config):
+    def _load_environment_variables(self, training_config):
         return {
             "IMAGE_SIZE": str(training_config.image_size),
             "EPOCHS": str(training_config.epochs),
@@ -100,7 +101,7 @@ class CLI:
             "BUCKET_PATH": str(training_config.bucket_path),
             "NUMBER_OF_FOLDS": str(training_config.number_of_folds),
             "USE_KFOLD": int(training_config.use_kfold),
-            "ACCELERATOR_COUNT": str(0),
+            "ACCELERATOR_COUNT": str(training_config.accelerator_count),
         }
 
 
@@ -115,6 +116,7 @@ class TrainingConfig:
     bucket_path: str
     number_of_folds: int
     use_kfold: bool
+    accelerator_count: int
 
 
 def main():
