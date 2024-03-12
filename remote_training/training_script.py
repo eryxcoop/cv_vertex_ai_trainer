@@ -30,8 +30,7 @@ class TrainingScript:
         self.bucket_path = os.environ["BUCKET_PATH"]
         self.dataset_path = Path("dataset")
         self.number_folds = int(os.environ["NUMBER_OF_FOLDS"])
-        self.save_path = Path(
-            self.dataset_path / f"{datetime.date.today().isoformat()}_{self.number_folds}-Fold_Cross-val")
+        self.save_path = self._define_save_path()
         self.accelerator_count = int(os.environ["ACCELERATOR_COUNT"])
         self.rank = os.environ["RANK"]
         self.training_results_path = self.save_path / "training_results"
@@ -238,6 +237,13 @@ class TrainingScript:
 
     def _get_device(self):
         return '0' if self._check_if_gpu_is_available() else 'cpu'
+
+    def _define_save_path(self):
+        formatted_datetime = datetime.datetime.now().isoformat()
+        if self.use_kfold:
+            return Path(self.dataset_path / f"{formatted_datetime}_{self.number_folds}-Fold_Cross-val")
+        else:
+            return Path(self.dataset_path / f"{formatted_datetime}_Single_Model_Training")
 
 
 if __name__ == "__main__":
