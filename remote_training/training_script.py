@@ -30,13 +30,13 @@ class TrainingScript:
         self.bucket_path = os.environ["BUCKET_PATH"]
         self.dataset_path = Path("dataset")
         self.number_folds = int(os.environ["NUMBER_OF_FOLDS"])
+        self.use_kfold = bool(int(os.environ["USE_KFOLD"]))
         self.save_path = self._define_save_path()
         self.accelerator_count = int(os.environ["ACCELERATOR_COUNT"])
         self.rank = os.environ["RANK"]
         self.training_results_path = self.save_path / "training_results"
         self.fold_datasets_path = self.save_path / "folds_datasets"
         self.single_dataset_path = self.save_path / "single_dataset"
-        self.use_kfold = bool(int(os.environ["USE_KFOLD"]))
 
     def run(self):
         self._check_if_gpu_is_available()
@@ -110,28 +110,17 @@ class TrainingScript:
     def _create_k_folds(self, annotations, class_names, images, datasets_path):
         file_names = [annotation.stem for annotation in annotations]
         class_indices = list(range(len(class_names)))
-        labels_per_image = pd.DataFrame([], columns=class_indices, index=file_names)
-        for label in annotations:
-            label_counter = Counter()
-            with open(label, "r") as lf:
-                lines = lf.readlines()
-            for line in lines:
-                label_counter[int(line.split(" ")[0])] += 1
-            labels_per_image.loc[label.stem] = label_counter
-        labels_per_image = labels_per_image.fillna(0.0)
-        k_fold_generator = KFold(n_splits=self.number_folds, shuffle=True, random_state=20)
-        folds_indices = list(k_fold_generator.split(labels_per_image))
-        folds = [self._fold_name(n) for n in range(self.number_folds)]
-        folds_df = pd.DataFrame(index=file_names, columns=folds)
-        for index, (train, val) in enumerate(folds_indices):
-            folds_df[self._fold_name(index)].loc[labels_per_image.iloc[train].index] = "train"
-            folds_df[self._fold_name(index)].loc[labels_per_image.iloc[val].index] = "val"
-        fold_label_distribution = pd.DataFrame(index=folds, columns=class_indices)
-        for n, (train_indices, val_indices) in enumerate(folds_indices):
-            train_totals = labels_per_image.iloc[train_indices].sum()
-            val_totals = labels_per_image.iloc[val_indices].sum()
-            ratio = val_totals / (train_totals + 1e-7)
-            fold_label_distribution.loc[self._fold_name(n)] = ratio
+
+        labels_per_image = self._build_df_with_labels_per_image(annotations, class_indices, file_names)
+
+        k_fold_indices = list(KFold(n_splits=self.number_folds, shuffle=True, random_state=20).split(labels_per_image))
+
+        fold_names = [self._fold_name(n) for n in range(self.number_folds)]
+        folds_df = self._build_df_with_image_distribution_for_folds(k_fold_indices, labels_per_image, file_names,
+                                                                    fold_names)
+
+        fold_label_distribution = self._build_df_with_label_distribution_for_folds(fold_names, class_indices,
+                                                                                   k_fold_indices, labels_per_image)
         folds_yamls = []
         for fold in folds_df.columns:
             fold_dir = datasets_path / fold
@@ -244,6 +233,34 @@ class TrainingScript:
             return Path(self.dataset_path / f"{formatted_datetime}_{self.number_folds}-Fold_Cross-val")
         else:
             return Path(self.dataset_path / f"{formatted_datetime}_Single_Model_Training")
+
+    def _build_df_with_labels_per_image(self, annotations, class_indices, file_names):
+        labels_per_image = pd.DataFrame([], columns=class_indices, index=file_names)
+        for label in annotations:
+            label_counter = Counter()
+            with open(label, "r") as lf:
+                lines = lf.readlines()
+            for line in lines:
+                label_counter[int(line.split(" ")[0])] += 1
+            labels_per_image.loc[label.stem] = label_counter
+        return labels_per_image.fillna(0.0)
+
+    def _build_df_with_image_distribution_for_folds(self, k_fold_indices, labels_per_image, file_names, fold_names):
+        folds_df = pd.DataFrame(index=file_names, columns=fold_names)
+
+        for index, (train, val) in enumerate(k_fold_indices):
+            folds_df[self._fold_name(index)].loc[labels_per_image.iloc[train].index] = "train"
+            folds_df[self._fold_name(index)].loc[labels_per_image.iloc[val].index] = "val"
+        return folds_df
+
+    def _build_df_with_label_distribution_for_folds(self, fold_names, class_indices, k_fold_indices, labels_per_image):
+        fold_label_distribution = pd.DataFrame(index=fold_names, columns=class_indices)
+        for n, (train_indices, val_indices) in enumerate(k_fold_indices):
+            train_totals = labels_per_image.iloc[train_indices].sum()
+            val_totals = labels_per_image.iloc[val_indices].sum()
+            ratio = val_totals / (train_totals + 1e-7)
+            fold_label_distribution.loc[self._fold_name(n)] = ratio
+        return fold_label_distribution
 
 
 if __name__ == "__main__":
