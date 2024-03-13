@@ -227,7 +227,7 @@ class TrainingScript:
         return '0' if self._check_if_gpu_is_available() else 'cpu'
 
     def _define_save_path(self):
-        formatted_datetime = datetime.datetime.now().isoformat()
+        formatted_datetime = datetime.datetime.now().isoformat().replace('.', '').replace(':', '')
         if self.use_kfold:
             return Path(self.dataset_path / f"{formatted_datetime}_{self.number_folds}-Fold_Cross-val")
         else:
