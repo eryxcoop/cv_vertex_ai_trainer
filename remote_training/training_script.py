@@ -29,7 +29,7 @@ class TrainingScript:
         self.bucket_path = os.environ["BUCKET_PATH"]
         self.dataset_path = Path("dataset")
         self.number_folds = int(os.environ["NUMBER_OF_FOLDS"])
-        self.use_kfold = bool(int(os.environ["USE_KFOLD"]))
+        self.use_kfold = self._to_bool(os.environ["USE_KFOLD"])
         self.save_path = self._define_save_path()
         self.accelerator_count = int(os.environ["ACCELERATOR_COUNT"])
         self.rank = os.environ["RANK"]
@@ -112,26 +112,27 @@ class TrainingScript:
 
         labels_per_image = self._build_df_with_labels_per_image(annotations, class_indices, file_names)
 
+        # It's necessary to cast to list because a generator can only be used once and we use it many times.
         k_fold_indices = list(KFold(n_splits=self.number_folds, shuffle=True, random_state=20).split(labels_per_image))
 
         fold_names = [self._fold_name(n) for n in range(self.number_folds)]
         folds_df = self._build_df_with_image_distribution_for_folds(k_fold_indices, labels_per_image, file_names,
                                                                     fold_names)
-
         fold_label_distribution = self._build_df_with_label_distribution_for_folds(fold_names, class_indices,
                                                                                    k_fold_indices, labels_per_image)
+        folds_yamls = self._build_train_and_val_dataset_yaml(folds_df, class_names, datasets_path)
+        self._build_datasets_folders(folds_df, datasets_path)
+        self._copy_images_and_labels_to_datasets(annotations, datasets_path, folds_df, images)
+        folds_df.to_csv(datasets_path / "kfold_datasplit.csv")
+        fold_label_distribution.to_csv(datasets_path / "kfold_label_distribution.csv")
+        return folds_yamls
+
+    def _build_train_and_val_dataset_yaml(self, folds_df, class_names, datasets_path):
         folds_yamls = []
         for fold in folds_df.columns:
             fold_dir = datasets_path / fold
             fold_dir.mkdir(parents=True, exist_ok=True)
-            (fold_dir / "train" / "images").mkdir(parents=True, exist_ok=True)
-            (fold_dir / "train" / "labels").mkdir(parents=True, exist_ok=True)
-            (fold_dir / "val" / "images").mkdir(parents=True, exist_ok=True)
-            (fold_dir / "val" / "labels").mkdir(parents=True, exist_ok=True)
-
             dataset_yaml = fold_dir / f"dataset.yaml"
-            folds_yamls.append(dataset_yaml)
-
             with open(dataset_yaml, "w") as ds_y:
                 yaml.safe_dump(
                     {
@@ -142,13 +143,22 @@ class TrainingScript:
                     },
                     ds_y,
                 )
+            folds_yamls.append(dataset_yaml)
+        return folds_yamls
+
+    def _build_datasets_folders(self, folds_df, datasets_path):
+        for fold in folds_df.columns:
+            fold_dir = datasets_path / fold
+            (fold_dir / "train" / "images").mkdir(parents=True, exist_ok=True)
+            (fold_dir / "train" / "labels").mkdir(parents=True, exist_ok=True)
+            (fold_dir / "val" / "images").mkdir(parents=True, exist_ok=True)
+            (fold_dir / "val" / "labels").mkdir(parents=True, exist_ok=True)
+
+    def _copy_images_and_labels_to_datasets(self, annotations, datasets_path, folds_df, images):
         for image, label in zip(images, annotations):
             for fold, train_or_val in folds_df.loc[image.stem].items():
                 shutil.copy(image, datasets_path / fold / train_or_val / "images" / image.name)
                 shutil.copy(label, datasets_path / fold / train_or_val / "labels" / label.name)
-        folds_df.to_csv(datasets_path / "kfold_datasplit.csv")
-        fold_label_distribution.to_csv(datasets_path / "kfold_label_distribution.csv")
-        return folds_yamls
 
     def _create_single_dataset(self, annotations, class_names, images, datasets_path):
         folder_name = 'single_dataset'
@@ -260,6 +270,12 @@ class TrainingScript:
             ratio = val_totals / (train_totals + 1e-7)
             fold_label_distribution.loc[self._fold_name(n)] = ratio
         return fold_label_distribution
+
+    def _to_bool(self, param_as_str):
+        try:
+            return bool(int(param_as_str))
+        except ValueError:
+            return bool(float(param_as_str))
 
 
 if __name__ == "__main__":
