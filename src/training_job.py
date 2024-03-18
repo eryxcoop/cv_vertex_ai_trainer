@@ -33,6 +33,7 @@ class TrainingJob:
         )
 
     def _load_environment_variables(self):
+        # BE CAREFUL: Google Cloud API only supports ten environment variables
         training_config = self.training_config
         return {
             "IMAGE_SIZE": str(training_config.image_size),
