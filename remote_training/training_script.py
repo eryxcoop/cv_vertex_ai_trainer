@@ -100,10 +100,11 @@ class TrainingScript:
 
     def _prepare_dataset(self):
         class_names, images, annotations = self._download_dataset()
-        folds_yamls = self.create_k_folds(annotations, class_names, images)
+        images, annotations = self._match_images_and_annotations(images, annotations)
+        folds_yamls = self._create_k_folds(annotations, class_names, images)
         return folds_yamls
 
-    def create_k_folds(self, annotations, class_names, images):
+    def _create_k_folds(self, annotations, class_names, images):
         file_names = [annotation.stem for annotation in annotations]
         class_indices = list(range(len(class_names)))
         labels_per_image = pd.DataFrame([], columns=class_indices, index=file_names)
@@ -179,8 +180,9 @@ class TrainingScript:
             yaml.dump(yaml_data, yaml_file, default_flow_style=False)
         annotations = sorted(self.dataset_path.rglob("*labels/*.txt"))
         images = []
+        images_path = self.images_bucket_path.split("/")[-1]
         for extension in [".jpg", ".jpeg", ".png"]:
-            images.extend(sorted((self.dataset_path / "images").rglob(f"*{extension}")))
+            images.extend(sorted((self.dataset_path / images_path).rglob(f"*{extension}")))
         return class_names, images, annotations
 
     def _prevent_multi_gpu_training(self):
@@ -202,6 +204,13 @@ class TrainingScript:
 
     def _get_device(self):
         return '0' if self._check_if_gpu_is_available() else 'cpu'
+
+    def _match_images_and_annotations(self, images, annotations):
+        annotations_stems = [annotation.stem for annotation in annotations]
+        images_stems = [image.stem for image in images]
+        images_with_annotation = [image for image in images if image.stem in annotations_stems]
+        annotations_with_image = [annotation for annotation in annotations if annotation.stem in images_stems]
+        return images_with_annotation, annotations_with_image
 
 
 if __name__ == "__main__":
