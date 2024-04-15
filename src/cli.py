@@ -67,6 +67,8 @@ class CLI:
             number_of_folds=config["training"]["number_of_folds"],
             images_bucket_path=config["google_cloud"]["images_bucket"],
             bucket_path=config["google_cloud"]["bucket"],
+            use_kfold=config["training"]["use_kfold"],
+            accelerator_count=config["vertex_ai_machine_config"]["accelerator_count"]
         )
 
     def _run_remote(self, config, training_config):
@@ -98,7 +100,8 @@ class CLI:
             "IMAGES_BUCKET_PATH": str(training_config.images_bucket_path),
             "BUCKET_PATH": str(training_config.bucket_path),
             "NUMBER_OF_FOLDS": str(training_config.number_of_folds),
-            "ACCELERATOR_COUNT": str(0),
+            "USE_KFOLD": int(training_config.use_kfold),
+            "ACCELERATOR_COUNT": str(training_config.accelerator_count),
         }
 
 
@@ -112,6 +115,8 @@ class TrainingConfig:
     images_bucket_path: str
     bucket_path: str
     number_of_folds: int
+    use_kfold: bool
+    accelerator_count: int
 
 
 def main():

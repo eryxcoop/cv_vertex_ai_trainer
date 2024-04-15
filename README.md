@@ -17,5 +17,12 @@ We are assuming:
 
 If you are getting a warning about "project quota" run `gcloud auth application-default login`
 
+run `pip install .` to install the package (or `pip install -e .` to install in editable mode)
 
+# Usage
 
+Create a `.toml` file following the example on `config.toml.example`
+
+`cv-vertex-ai-trainer --help` to see the available commands
+
+run `cv-vertex-ai-trainer -c config.toml`. Add `--local` to run the training locally.
