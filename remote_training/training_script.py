@@ -29,7 +29,7 @@ class TrainingScript:
         self.bucket_path = os.environ["BUCKET_PATH"]
         self.dataset_path = Path("dataset")
         self.number_folds = int(os.environ["NUMBER_OF_FOLDS"])
-        self.use_kfold = self._to_bool(os.environ["USE_KFOLD"])
+        self.use_kfold = (os.environ["USE_KFOLD"] == "True")
         self.save_path = self._define_save_path()
         self.accelerator_count = int(os.environ["ACCELERATOR_COUNT"])
         self.rank = os.environ["RANK"]
@@ -41,30 +41,37 @@ class TrainingScript:
         self._check_if_gpu_is_available()
         self._prevent_multi_gpu_training()
 
-        dataset_yaml_list = self._prepare_dataset()
+        class_names, images, annotations = self._download_dataset()
+        images, annotations = self._match_images_and_annotations(images, annotations)
+        datasets_path = self.fold_datasets_path if self.use_kfold else self.single_dataset_path
 
-        for k in range(len(dataset_yaml_list)):
-            dataset_yaml = dataset_yaml_list[k]
-            model_name = self._fold_name(k) if self.use_kfold else "single_model"
-            # self._construct_fold(k)
+        if self.use_kfold:
+            dataset_yaml_list, folds_df = self._create_k_folds(annotations, class_names, datasets_path)
+            for fold_number in range(len(dataset_yaml_list)):
+                dataset_yaml = dataset_yaml_list[fold_number]
+                model_name = self._fold_name(fold_number)
+                fold_path = self._construct_fold(fold_number, annotations, datasets_path, folds_df, images)
+                model = self._train_model(dataset_yaml, model_name)
+                self._save_model_metrics(model_name, model)
+                self._export_results(fold_path)
+                self._delete_fold(fold_number, datasets_path)
+        else:
+            dataset_yaml = self._create_single_dataset(annotations, class_names, images, datasets_path)
+            model_name = "single_model"
             model = self._train_model(dataset_yaml, model_name)
             self._save_model_metrics(model_name, model)
-            # self._delete_fold(k)
 
-        self._export_results()
-
-    def _export_results(self):
-        os.system(f'gsutil -m cp -r "{self.save_path}" "{self.bucket_path}"')
+    def _export_results(self, fold_path):
+        os.system(f'gsutil -m cp -r "{fold_path}" "{self.bucket_path}"')
 
     def _save_model_metrics(self, fold_name, model):
         metrics = model.metrics.box
-        map50 = self._get_map_50(metrics)
         results = pd.DataFrame(
             {
                 "p": metrics.p,
                 "r": metrics.r,
-                "map50": map50,
-                "map50-95": metrics.maps,
+                "map50": metrics.map50(),
+                "map50-95": metrics.map(),
             }
         )
         results.to_csv(f"{self.training_results_path}/{fold_name}/metrics.csv")
@@ -102,21 +109,13 @@ class TrainingScript:
         }
         return augmentations
 
-    def _prepare_dataset(self):
-        class_names, images, annotations = self._download_dataset()
-        images, annotations = self._match_images_and_annotations(images, annotations)
-        if self.use_kfold:
-            return self._create_k_folds(annotations, class_names, images, self.fold_datasets_path)
-        else:
-            return self._create_single_dataset(annotations, class_names, images, self.single_dataset_path)
-
-    def _create_k_folds(self, annotations, class_names, images, datasets_path):
+    def _create_k_folds(self, annotations, class_names, datasets_path):
         file_names = [annotation.stem for annotation in annotations]
         class_indices = list(range(len(class_names)))
 
         labels_per_image = self._build_df_with_labels_per_image(annotations, class_indices, file_names)
 
-        # It's necessary to cast to list because a generator can only be used once and we use it many times.
+        # It's necessary to cast to list because a generator can only be used once, and we use it many times.
         k_fold_indices = list(KFold(n_splits=self.number_folds, shuffle=True, random_state=20).split(labels_per_image))
 
         fold_names = [self._fold_name(n) for n in range(self.number_folds)]
@@ -126,10 +125,9 @@ class TrainingScript:
                                                                                    k_fold_indices, labels_per_image)
         folds_yamls = self._build_train_and_val_dataset_yaml(folds_df, class_names, datasets_path)
         self._build_datasets_folders(folds_df, datasets_path)
-        self._copy_images_and_labels_to_datasets(annotations, datasets_path, folds_df, images)
         folds_df.to_csv(datasets_path / "kfold_datasplit.csv")
         fold_label_distribution.to_csv(datasets_path / "kfold_label_distribution.csv")
-        return folds_yamls
+        return folds_yamls, folds_df
 
     def _build_train_and_val_dataset_yaml(self, folds_df, class_names, datasets_path):
         folds_yamls = []
@@ -193,7 +191,7 @@ class TrainingScript:
         first_label = annotations[0]
         shutil.copy(first_image, datasets_path / folder_name / 'val' / "images" / first_image.name)
         shutil.copy(first_label, datasets_path / folder_name / 'val' / "labels" / first_label.name)
-        return [dataset_yaml]
+        return dataset_yaml
 
     def _download_dataset(self):
         self.dataset_path.mkdir(parents=True, exist_ok=True)
@@ -277,10 +275,7 @@ class TrainingScript:
         return fold_label_distribution
 
     def _to_bool(self, param_as_str):
-        try:
-            return bool(int(param_as_str))
-        except ValueError:
-            return bool(float(param_as_str))
+        return param_as_str == "true"
 
     def _match_images_and_annotations(self, images, annotations):
         annotations_stems = [annotation.stem for annotation in annotations]
@@ -289,10 +284,17 @@ class TrainingScript:
         annotations_with_image = [annotation for annotation in annotations if annotation.stem in images_stems]
         return images_with_annotation, annotations_with_image
 
-    def _get_map_50(self, metrics):
-        if not (metrics.all_ap == []):
-            return metrics.all_ap[:, 0]
-        return []
+    def _construct_fold(self, fold_number, annotations, datasets_path, folds_df, images):
+        folder_name = self._fold_name(fold_number)
+        for image, label in zip(images, annotations):
+            for fold, train_or_val in folds_df.loc[image.stem].items():
+                if fold == folder_name:
+                    shutil.copy(image, datasets_path / fold / train_or_val / "images" / image.name)
+                    shutil.copy(label, datasets_path / fold / train_or_val / "labels" / label.name)
+        return datasets_path / folder_name
+
+    def _delete_fold(self, fold_number, datasets_path):
+        shutil.rmtree(datasets_path / self._fold_name(fold_number))
 
 
 if __name__ == "__main__":
