@@ -46,8 +46,10 @@ class TrainingScript:
         for k in range(len(dataset_yaml_list)):
             dataset_yaml = dataset_yaml_list[k]
             model_name = self._fold_name(k) if self.use_kfold else "single_model"
+            # self._construct_fold(k)
             model = self._train_model(dataset_yaml, model_name)
             self._save_model_metrics(model_name, model)
+            # self._delete_fold(k)
 
         self._export_results()
 
@@ -56,11 +58,12 @@ class TrainingScript:
 
     def _save_model_metrics(self, fold_name, model):
         metrics = model.metrics.box
+        map50 = self._get_map_50(metrics)
         results = pd.DataFrame(
             {
                 "p": metrics.p,
                 "r": metrics.r,
-                "map50": metrics.all_ap[:, 0],
+                "map50": map50,
                 "map50-95": metrics.maps,
             }
         )
@@ -285,6 +288,11 @@ class TrainingScript:
         images_with_annotation = [image for image in images if image.stem in annotations_stems]
         annotations_with_image = [annotation for annotation in annotations if annotation.stem in images_stems]
         return images_with_annotation, annotations_with_image
+
+    def _get_map_50(self, metrics):
+        if not (metrics.all_ap == []):
+            return metrics.all_ap[:, 0]
+        return []
 
 
 if __name__ == "__main__":
