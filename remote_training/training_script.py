@@ -71,7 +71,7 @@ class TrainingScript:
                 "p": metrics.p,
                 "r": metrics.r,
                 "map50": metrics.ap50,
-                "map50-95": metrics.maps,
+                "map50-95": metrics.ap,
             }
         )
         results.to_csv(f"{self.training_results_path}/{fold_name}/metrics.csv")
