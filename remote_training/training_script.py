@@ -1,7 +1,7 @@
 import datetime
+import gc
 import logging
 import os
-import gc
 import shutil
 from collections import Counter
 from pathlib import Path
@@ -47,15 +47,12 @@ class TrainingScript:
         datasets_path = self.fold_datasets_path if self.use_kfold else self.single_dataset_path
 
         if self.use_kfold:
-            dataset_yaml_list, folds_df = self._create_k_folds(annotations, class_names, datasets_path)
+            dataset_yaml_list, folds_df = self._create_k_folds(annotations, class_names, images, datasets_path)
             for fold_number in range(len(dataset_yaml_list)):
                 dataset_yaml = dataset_yaml_list[fold_number]
                 model_name = self._fold_name(fold_number)
-                fold_path = self._construct_fold(fold_number, annotations, datasets_path, folds_df, images)
                 model = self._train_model(dataset_yaml, model_name)
                 self._save_model_metrics(model_name, model)
-                self._export_results(fold_path)
-                self._delete_fold(fold_number, datasets_path)
                 if self._check_if_gpu_is_available():
                     torch.cuda.empty_cache()
                     gc.collect()
@@ -65,8 +62,10 @@ class TrainingScript:
             model = self._train_model(dataset_yaml, model_name)
             self._save_model_metrics(model_name, model)
 
-    def _export_results(self, fold_path):
-        os.system(f'gsutil -m cp -r "{fold_path}" "{self.bucket_path}"')
+        self._export_results()
+
+    def _export_results(self):
+        os.system(f'gsutil -m cp -r "{self.save_path}" "{self.bucket_path}"')
 
     def _save_model_metrics(self, fold_name, model):
         metrics = model.metrics.box
@@ -113,7 +112,7 @@ class TrainingScript:
         }
         return augmentations
 
-    def _create_k_folds(self, annotations, class_names, datasets_path):
+    def _create_k_folds(self, annotations, class_names, images, datasets_path):
         file_names = [annotation.stem for annotation in annotations]
         class_indices = list(range(len(class_names)))
 
@@ -129,6 +128,7 @@ class TrainingScript:
                                                                                    k_fold_indices, labels_per_image)
         folds_yamls = self._build_train_and_val_dataset_yaml(folds_df, class_names, datasets_path)
         self._build_datasets_folders(folds_df, datasets_path)
+        self._copy_images_and_labels_to_datasets(annotations, datasets_path, folds_df, images)
         folds_df.to_csv(datasets_path / "kfold_datasplit.csv")
         fold_label_distribution.to_csv(datasets_path / "kfold_label_distribution.csv")
         return folds_yamls, folds_df
@@ -278,27 +278,12 @@ class TrainingScript:
             fold_label_distribution.loc[self._fold_name(n)] = ratio
         return fold_label_distribution
 
-    def _to_bool(self, param_as_str):
-        return param_as_str == "true"
-
     def _match_images_and_annotations(self, images, annotations):
         annotations_stems = [annotation.stem for annotation in annotations]
         images_stems = [image.stem for image in images]
         images_with_annotation = [image for image in images if image.stem in annotations_stems]
         annotations_with_image = [annotation for annotation in annotations if annotation.stem in images_stems]
         return images_with_annotation, annotations_with_image
-
-    def _construct_fold(self, fold_number, annotations, datasets_path, folds_df, images):
-        folder_name = self._fold_name(fold_number)
-        for image, label in zip(images, annotations):
-            for fold, train_or_val in folds_df.loc[image.stem].items():
-                if fold == folder_name:
-                    shutil.copy(image, datasets_path / fold / train_or_val / "images" / image.name)
-                    shutil.copy(label, datasets_path / fold / train_or_val / "labels" / label.name)
-        return datasets_path / folder_name
-
-    def _delete_fold(self, fold_number, datasets_path):
-        shutil.rmtree(datasets_path / self._fold_name(fold_number))
 
 
 if __name__ == "__main__":
