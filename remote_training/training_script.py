@@ -47,15 +47,13 @@ class TrainingScript:
         datasets_path = self.fold_datasets_path if self.use_kfold else self.single_dataset_path
 
         if self.use_kfold:
-            dataset_yaml_list, folds_df = self._create_k_folds(annotations, class_names, images, datasets_path)
+            dataset_yaml_list = self._create_k_folds(annotations, class_names, images, datasets_path)
             for fold_number in range(len(dataset_yaml_list)):
                 dataset_yaml = dataset_yaml_list[fold_number]
                 model_name = self._fold_name(fold_number)
                 model = self._train_model(dataset_yaml, model_name)
                 self._save_model_metrics(model_name, model)
-                if self._check_if_gpu_is_available():
-                    torch.cuda.empty_cache()
-                    gc.collect()
+                self._clean_gpu_cache()  # This is necessary to avoid running out of memory
         else:
             dataset_yaml = self._create_single_dataset(annotations, class_names, images, datasets_path)
             model_name = "single_model"
@@ -131,7 +129,7 @@ class TrainingScript:
         self._copy_images_and_labels_to_datasets(annotations, datasets_path, folds_df, images)
         folds_df.to_csv(datasets_path / "kfold_datasplit.csv")
         fold_label_distribution.to_csv(datasets_path / "kfold_label_distribution.csv")
-        return folds_yamls, folds_df
+        return folds_yamls
 
     def _build_train_and_val_dataset_yaml(self, folds_df, class_names, datasets_path):
         folds_yamls = []
@@ -284,6 +282,11 @@ class TrainingScript:
         images_with_annotation = [image for image in images if image.stem in annotations_stems]
         annotations_with_image = [annotation for annotation in annotations if annotation.stem in images_stems]
         return images_with_annotation, annotations_with_image
+
+    def _clean_gpu_cache(self):
+        if self._check_if_gpu_is_available():
+            torch.cuda.empty_cache()
+            gc.collect()
 
 
 if __name__ == "__main__":
