@@ -1,6 +1,7 @@
 import datetime
 import logging
 import os
+import gc
 import shutil
 from collections import Counter
 from pathlib import Path
@@ -55,6 +56,9 @@ class TrainingScript:
                 self._save_model_metrics(model_name, model)
                 self._export_results(fold_path)
                 self._delete_fold(fold_number, datasets_path)
+                if self._check_if_gpu_is_available():
+                    torch.cuda.empty_cache()
+                    gc.collect()
         else:
             dataset_yaml = self._create_single_dataset(annotations, class_names, images, datasets_path)
             model_name = "single_model"
