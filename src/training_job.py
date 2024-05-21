@@ -45,7 +45,7 @@ class TrainingJob:
             "BUCKET_PATH": str(training_config.bucket_path),
             "NUMBER_OF_FOLDS": str(training_config.number_of_folds),
             "ACCELERATOR_COUNT": str(training_config.accelerator_count),
-            "USE_KFOLD": int(training_config.use_kfold)
+            "USE_KFOLD": str(training_config.use_kfold)
         }
 
     def _load_requirements(self) -> list[str]:

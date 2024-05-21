@@ -1,4 +1,5 @@
 import datetime
+import gc
 import logging
 import os
 import shutil
@@ -29,7 +30,7 @@ class TrainingScript:
         self.bucket_path = os.environ["BUCKET_PATH"]
         self.dataset_path = Path("dataset")
         self.number_folds = int(os.environ["NUMBER_OF_FOLDS"])
-        self.use_kfold = self._to_bool(os.environ["USE_KFOLD"])
+        self.use_kfold = (os.environ["USE_KFOLD"] == "True")
         self.save_path = self._define_save_path()
         self.accelerator_count = int(os.environ["ACCELERATOR_COUNT"])
         self.rank = os.environ["RANK"]
@@ -41,11 +42,21 @@ class TrainingScript:
         self._check_if_gpu_is_available()
         self._prevent_multi_gpu_training()
 
-        dataset_yaml_list = self._prepare_dataset()
+        class_names, images, annotations = self._download_dataset()
+        images, annotations = self._match_images_and_annotations(images, annotations)
+        datasets_path = self.fold_datasets_path if self.use_kfold else self.single_dataset_path
 
-        for k in range(len(dataset_yaml_list)):
-            dataset_yaml = dataset_yaml_list[k]
-            model_name = self._fold_name(k) if self.use_kfold else "single_model"
+        if self.use_kfold:
+            dataset_yaml_list = self._create_k_folds(annotations, class_names, images, datasets_path)
+            for fold_number in range(len(dataset_yaml_list)):
+                dataset_yaml = dataset_yaml_list[fold_number]
+                model_name = self._fold_name(fold_number)
+                model = self._train_model(dataset_yaml, model_name)
+                self._save_model_metrics(model_name, model)
+                self._clean_gpu_cache()  # This is necessary to avoid running out of memory
+        else:
+            dataset_yaml = self._create_single_dataset(annotations, class_names, images, datasets_path)
+            model_name = "single_model"
             model = self._train_model(dataset_yaml, model_name)
             self._save_model_metrics(model_name, model)
 
@@ -60,8 +71,8 @@ class TrainingScript:
             {
                 "p": metrics.p,
                 "r": metrics.r,
-                "map50": metrics.all_ap[:, 0],
-                "map50-95": metrics.maps,
+                "map50": metrics.ap50,
+                "map50-95": metrics.ap,
             }
         )
         results.to_csv(f"{self.training_results_path}/{fold_name}/metrics.csv")
@@ -99,20 +110,13 @@ class TrainingScript:
         }
         return augmentations
 
-    def _prepare_dataset(self):
-        class_names, images, annotations = self._download_dataset()
-        if self.use_kfold:
-            return self._create_k_folds(annotations, class_names, images, self.fold_datasets_path)
-        else:
-            return self._create_single_dataset(annotations, class_names, images, self.single_dataset_path)
-
     def _create_k_folds(self, annotations, class_names, images, datasets_path):
         file_names = [annotation.stem for annotation in annotations]
         class_indices = list(range(len(class_names)))
 
         labels_per_image = self._build_df_with_labels_per_image(annotations, class_indices, file_names)
 
-        # It's necessary to cast to list because a generator can only be used once and we use it many times.
+        # It's necessary to cast to list because a generator can only be used once, and we use it many times.
         k_fold_indices = list(KFold(n_splits=self.number_folds, shuffle=True, random_state=20).split(labels_per_image))
 
         fold_names = [self._fold_name(n) for n in range(self.number_folds)]
@@ -189,7 +193,7 @@ class TrainingScript:
         first_label = annotations[0]
         shutil.copy(first_image, datasets_path / folder_name / 'val' / "images" / first_image.name)
         shutil.copy(first_label, datasets_path / folder_name / 'val' / "labels" / first_label.name)
-        return [dataset_yaml]
+        return dataset_yaml
 
     def _download_dataset(self):
         self.dataset_path.mkdir(parents=True, exist_ok=True)
@@ -212,8 +216,9 @@ class TrainingScript:
             yaml.dump(yaml_data, yaml_file, default_flow_style=False)
         annotations = sorted(self.dataset_path.rglob("*labels/*.txt"))
         images = []
+        images_path = self.images_bucket_path.split("/")[-1]
         for extension in [".jpg", ".jpeg", ".png"]:
-            images.extend(sorted((self.dataset_path / "images").rglob(f"*{extension}")))
+            images.extend(sorted((self.dataset_path / images_path).rglob(f"*{extension}")))
         return class_names, images, annotations
 
     def _prevent_multi_gpu_training(self):
@@ -271,11 +276,17 @@ class TrainingScript:
             fold_label_distribution.loc[self._fold_name(n)] = ratio
         return fold_label_distribution
 
-    def _to_bool(self, param_as_str):
-        try:
-            return bool(int(param_as_str))
-        except ValueError:
-            return bool(float(param_as_str))
+    def _match_images_and_annotations(self, images, annotations):
+        annotations_stems = [annotation.stem for annotation in annotations]
+        images_stems = [image.stem for image in images]
+        images_with_annotation = [image for image in images if image.stem in annotations_stems]
+        annotations_with_image = [annotation for annotation in annotations if annotation.stem in images_stems]
+        return images_with_annotation, annotations_with_image
+
+    def _clean_gpu_cache(self):
+        if self._check_if_gpu_is_available():
+            torch.cuda.empty_cache()
+            gc.collect()
 
 
 if __name__ == "__main__":
