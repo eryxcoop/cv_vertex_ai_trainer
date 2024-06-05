@@ -68,7 +68,10 @@ class CLI:
             images_bucket_path=config["google_cloud"]["images_bucket"],
             bucket_path=config["google_cloud"]["bucket"],
             use_kfold=config["training"]["use_kfold"],
-            accelerator_count=config["vertex_ai_machine_config"]["accelerator_count"]
+            accelerator_count=config["vertex_ai_machine_config"]["accelerator_count"],
+            mlflow_tracking_uri=config["mlflow"]["tracking_uri"],
+            mlflow_experiment_name=config["mlflow"]["experiment_name"],
+            mlflow_run=config["mlflow"]["run"]
         )
 
     def _run_remote(self, config, training_config):
@@ -102,6 +105,9 @@ class CLI:
             "NUMBER_OF_FOLDS": str(training_config.number_of_folds),
             "USE_KFOLD": str(training_config.use_kfold),
             "ACCELERATOR_COUNT": str(training_config.accelerator_count),
+            "MLFLOW_TRACKING_URI": str(training_config.mlflow_tracking_uri),
+            "MLFLOW_EXPERIMENT_NAME": str(training_config.mlflow_experiment_name),
+            "MLFLOW_RUN": str(training_config.mlflow_run)
         }
 
 
@@ -117,6 +123,9 @@ class TrainingConfig:
     number_of_folds: int
     use_kfold: bool
     accelerator_count: int
+    mlflow_tracking_uri: str
+    mlflow_experiment_name: str
+    mlflow_run: str
 
 
 def main():

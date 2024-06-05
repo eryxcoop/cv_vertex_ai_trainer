@@ -33,7 +33,6 @@ class TrainingJob:
         )
 
     def _load_environment_variables(self):
-        # BE CAREFUL: Google Cloud API only supports ten environment variables
         training_config = self.training_config
         return {
             "IMAGE_SIZE": str(training_config.image_size),
@@ -45,7 +44,10 @@ class TrainingJob:
             "BUCKET_PATH": str(training_config.bucket_path),
             "NUMBER_OF_FOLDS": str(training_config.number_of_folds),
             "ACCELERATOR_COUNT": str(training_config.accelerator_count),
-            "USE_KFOLD": str(training_config.use_kfold)
+            "USE_KFOLD": str(training_config.use_kfold),
+            "MLFLOW_TRACKING_URI": str(training_config.mlflow_tracking_uri),
+            "MLFLOW_EXPERIMENT_NAME": str(training_config.mlflow_experiment_name),
+            "MLFLOW_RUN": str(training_config.mlflow_run)
         }
 
     def _load_requirements(self) -> list[str]:
