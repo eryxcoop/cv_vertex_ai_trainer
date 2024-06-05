@@ -6,11 +6,11 @@ import shutil
 from collections import Counter
 from pathlib import Path
 
+import mlflow
 import pandas as pd
 import torch
 import yaml
 from sklearn.model_selection import KFold
-import mlflow
 
 # This is a workaround to avoid Ultralytics trying to do multi-gpu training. Despite trying to set it as
 # an env var, it still tries to do multi-gpu training. This is a workaround to avoid that.
@@ -38,9 +38,7 @@ class TrainingScript:
         self.training_results_path = self.save_path / "training_results"
         self.fold_datasets_path = self.save_path / "folds_datasets"
         self.single_dataset_path = self.save_path / "single_dataset"
-        self.mlflow_tracking_uri = os.environ["MLFLOW_TRACKING_URI"]
         self.mlflow_experiment_name = os.environ["MLFLOW_EXPERIMENT_NAME"]
-        self.mlflow_run = os.environ["MLFLOW_RUN"]
 
     def run(self):
         self._check_if_gpu_is_available()
