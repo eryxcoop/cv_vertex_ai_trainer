@@ -96,6 +96,8 @@ class TrainingScript:
         runs_ordered_by_end_time = mlflow.search_runs([experiment.experiment_id], order_by=["end_time DESC"])
         last_run_id = runs_ordered_by_end_time.loc[0, 'run_id']
         model_uri = f"runs:/{last_run_id}/artifacts/weights/best.pt"
+        with mlflow.start_run(run_id=last_run_id):
+            mlflow.log_params(self.__dict__)
         mlflow.register_model(model_uri, "Single yolo model trained")
         return model
 
