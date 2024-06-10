@@ -47,7 +47,9 @@ class TrainingJob:
             "USE_KFOLD": str(training_config.use_kfold),
             "MLFLOW_TRACKING_URI": str(training_config.mlflow_tracking_uri),
             "MLFLOW_EXPERIMENT_NAME": str(training_config.mlflow_experiment_name),
-            "MLFLOW_RUN": str(training_config.mlflow_run)
+            "MLFLOW_RUN": str(training_config.mlflow_run),
+            "MLFLOW_TRACKING_USERNAME": str(training_config.mlflow_tracking_username),
+            "MLFLOW_TRACKING_PASSWORD": str(training_config.mlflow_tracking_password)
         }
 
     def _load_requirements(self) -> list[str]:
