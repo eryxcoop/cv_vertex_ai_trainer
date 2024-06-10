@@ -18,3 +18,10 @@ number_of_folds = 2
 epochs = 1
 model = "yolov8n.pt"
 image_size = "960, 540"
+
+[mlflow]
+tracking_uri = "http://127.0.0.1:5000"
+experiment_name = "experiment-name"
+run = "run-name"
+user = "user"
+password = "password"
