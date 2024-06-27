@@ -6,23 +6,25 @@ We are assuming:
 - You have a Google Cloud Platform project
 - You have a Google Cloud Storage bucket
 - You have a Label Studio project with images and annotations
-- In order to retrieve your Label Studio token, refer to: https://api.labelstud.io/#tag/Users/operation/api_current-user_token_list
+- In order to retrieve your Label Studio token, refer to: https://api.labelstud.io/api-reference/introduction/getting-started#authentication
 - Your images are stored in a Google Cloud Storage bucket
 
 # Setup requirements
 
-`pip install -r requirements.txt`
+1) Run `pip install -r requirements.txt`.
 
-`gcloud auth login`
+2) Install `gcloud CLI`, refer to: https://cloud.google.com/sdk/docs/install?hl=es-419
 
-If you are getting a warning about "project quota" run `gcloud auth application-default login`
+3) Run `gcloud auth login`.
 
-run `pip install .` to install the package (or `pip install -e .` to install in editable mode)
+    If you are getting a warning about "project quota" or about "default credentials not found" run `gcloud auth application-default login`.
+
+4) Run `pip install .` to install the package (or `pip install -e .` to install in editable mode)
 
 # Usage
 
-Create a `.toml` file following the example on `config.toml.example`
+Create a `.toml` file following the example on `config_example.toml`
 
-`cv-vertex-ai-trainer --help` to see the available commands
+Run `cv-vertex-ai-trainer -c config.toml` to start training on the cloud. 
 
-run `cv-vertex-ai-trainer -c config.toml`. Add `--local` to run the training locally.
+Add `--local` to run the training locally.
