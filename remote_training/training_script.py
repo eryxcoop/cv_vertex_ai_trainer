@@ -1,12 +1,13 @@
 import datetime
 import gc
+import json
 import logging
 import os
 import shutil
 from collections import Counter
 from pathlib import Path
 
-import mlflow
+#import mlflow
 import pandas as pd
 import torch
 import yaml
@@ -92,13 +93,13 @@ class TrainingScript:
             name=model_name,
             **augmentations,
         )
-        experiment = mlflow.get_experiment_by_name(self.mlflow_experiment_name)
-        runs_ordered_by_end_time = mlflow.search_runs([experiment.experiment_id], order_by=["end_time DESC"])
-        last_run_id = runs_ordered_by_end_time.loc[0, 'run_id']
-        model_uri = f"runs:/{last_run_id}/artifacts/weights/best.pt"
-        with mlflow.start_run(run_id=last_run_id):
-            mlflow.log_params(self.__dict__)
-        mlflow.register_model(model_uri, "Single yolo model trained")
+        #experiment = mlflow.get_experiment_by_name(self.mlflow_experiment_name)
+        #runs_ordered_by_end_time = mlflow.search_runs([experiment.experiment_id], order_by=["end_time DESC"])
+        #last_run_id = runs_ordered_by_end_time.loc[0, 'run_id']
+        #model_uri = f"runs:/{last_run_id}/artifacts/weights/best.pt"
+        #with mlflow.start_run(run_id=last_run_id):
+        #    mlflow.log_params(self.__dict__)
+        #mlflow.register_model(model_uri, "Single yolo model trained")
         return model
 
     def _augmentations(self):
@@ -209,6 +210,9 @@ class TrainingScript:
         self.save_path.mkdir(parents=True, exist_ok=True)
         os.system(f'gsutil -m cp -r "{self.images_bucket_path}" {str(self.dataset_path)}')
         os.system(
+            f"curl -X GET {self.label_studio_project_url}/export\?exportType\=JSON -H 'Authorization: Token {self.label_studio_token}' --output 'annotations.json'"
+        )
+        os.system(
             f"curl -X GET {self.label_studio_project_url}/export\?exportType\=YOLO -H 'Authorization: Token {self.label_studio_token}' --output 'annotations.zip'"
         )
         os.system(f"unzip -o annotations -d {str(self.dataset_path)}")
@@ -228,6 +232,19 @@ class TrainingScript:
         images_path = self.images_bucket_path.split("/")[-1]
         for extension in [".jpg", ".jpeg", ".png"]:
             images.extend(sorted((self.dataset_path / images_path).rglob(f"*{extension}")))
+
+        with open('annotations.json', 'r') as file:
+            data = json.load(file)
+
+        for element in data:
+            image_name = element['data']['image'].split('/')[-1]
+            with open(f'{self.base_path}/{self.dataset_path}/labels/{image_name}.txt', 'w') as file:
+                for annotation in element['annotations']:
+                    for res in annotation['result']:
+                        annotation = self._convert_annotation_to_yolo(res['value'])
+                        annotation_type = res['type']
+                        annotation_class = class_names.index(res['value'][annotation_type][0])
+                        file.write(f"{annotation_class} {' '.join(map(str, annotation))}\n")
         return class_names, images, annotations
 
     def _prevent_multi_gpu_training(self):
@@ -296,6 +313,31 @@ class TrainingScript:
         if self._check_if_gpu_is_available():
             torch.cuda.empty_cache()
             gc.collect()
+
+    # label-studio-converter function
+    def _convert_annotation_to_yolo(self, label):
+
+        if not ("x" in label and "y" in label and 'width' in label):
+            return None
+
+        if 'height' not in label:
+            x = (label['x'] / 2) / 100
+            y = (label['y'] / 2) / 100
+            w = label['width'] / 100
+            return x, y, w
+
+        w = label['width']
+        h = label['height']
+
+        x = (label['x'] + w / 2) / 100
+        y = (label['y'] + h / 2) / 100
+        w = w / 100
+        h = h / 100
+
+        return x, y, w, h
+
+    def _find_class_number(self, class_to_find, class_names):
+        return class_names.index(class_to_find)
 
 
 if __name__ == "__main__":

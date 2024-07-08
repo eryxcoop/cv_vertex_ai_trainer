@@ -10,6 +10,7 @@ __pycache__/
 dataset/
 *.pt
 *.zip
+*.json
 
 # Config files
 config.toml
