@@ -237,7 +237,7 @@ class TrainingScript:
             data = json.load(file)
 
         for element in data:
-            image_name = element['data']['image'].split('/')[-1]
+            image_name = element['data']['image'].split('/')[-1].replace('.png', '')
             with open(f'{self.base_path}/{self.dataset_path}/labels/{image_name}.txt', 'w') as file:
                 for annotation in element['annotations']:
                     for res in annotation['result']:
