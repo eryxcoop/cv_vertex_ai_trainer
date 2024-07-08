@@ -220,7 +220,8 @@ class TrainingScript:
             class_names = f.read().splitlines()
         yaml_data = {
             "names": class_names,
-            "nc": len(class_names),
+            "nc": 1,
+            "kpt_shape": [len(class_names) - 1, 3],
             "train": f"{self.base_path}/{self.dataset_path}/train",
             "val": f"{self.base_path}/{self.dataset_path}/val",
         }
@@ -240,11 +241,25 @@ class TrainingScript:
             image_name = element['data']['image'].split('/')[-1].replace('.png', '')
             with open(f'{self.base_path}/{self.dataset_path}/labels/{image_name}.txt', 'w') as file:
                 for annotation in element['annotations']:
+                    amount = len(annotation['result'])
+                    # 0 not visible and not labeled
+                    # 2 visible and labeled
+                    kp_annotations_list = [[0, 0, 0] for _ in range(len(class_names) - 1)]
+                    object_annotation = None
                     for res in annotation['result']:
-                        annotation = self._convert_annotation_to_yolo(res['value'])
+                        yolo_annotation = self._convert_annotation_to_yolo(res['value'])
                         annotation_type = res['type']
                         annotation_class = class_names.index(res['value'][annotation_type][0])
-                        file.write(f"{annotation_class} {' '.join(map(str, annotation))}\n")
+                        if annotation_class == 8:
+                            object_annotation = yolo_annotation
+                        else:
+                            kp_annotations_list[annotation_class-1] = [yolo_annotation[0], yolo_annotation[1], 1]
+                    line = f"0 {' '.join(map(str, object_annotation))} "
+                    for idx, kp_annotation in enumerate(kp_annotations_list):
+                        line += f"{' '.join(map(str, kp_annotation))}"
+                        if idx < (len(kp_annotations_list) - 1):
+                            line += " "
+                file.write(line)
         return class_names, images, annotations
 
     def _prevent_multi_gpu_training(self):
@@ -316,15 +331,13 @@ class TrainingScript:
 
     # label-studio-converter function
     def _convert_annotation_to_yolo(self, label):
-
         if not ("x" in label and "y" in label and 'width' in label):
             return None
 
         if 'height' not in label:
             x = (label['x'] / 2) / 100
             y = (label['y'] / 2) / 100
-            w = label['width'] / 100
-            return x, y, w
+            return x, y
 
         w = label['width']
         h = label['height']
