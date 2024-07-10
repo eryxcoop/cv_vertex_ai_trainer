@@ -1,5 +1,6 @@
 import datetime
 import gc
+import json
 import logging
 import os
 import shutil
@@ -17,6 +18,7 @@ from sklearn.model_selection import KFold
 # It's necessary to do this before importing ultralytics
 os.environ["RANK"] = "-1"
 from ultralytics import YOLO
+from label_studio_sdk.converter import Converter
 
 
 class TrainingScript:
@@ -24,6 +26,7 @@ class TrainingScript:
         self.image_size = [int(size) for size in os.environ["IMAGE_SIZE"].replace(" ", "").split(",")]
         self.epochs = int(os.environ["EPOCHS"])
         self.model = os.environ["MODEL"]
+        self.obb = os.environ["OBB"] == "True"
         self.label_studio_token = os.environ["LABEL_STUDIO_TOKEN"]
         self.label_studio_project_url = os.environ["LABEL_STUDIO_PROJECT_URL"]
         self.images_bucket_path = os.environ["IMAGES_BUCKET_PATH"]
@@ -92,13 +95,13 @@ class TrainingScript:
             name=model_name,
             **augmentations,
         )
-        #experiment = mlflow.get_experiment_by_name(self.mlflow_experiment_name)
-        #runs_ordered_by_end_time = mlflow.search_runs([experiment.experiment_id], order_by=["end_time DESC"])
-        #last_run_id = runs_ordered_by_end_time.loc[0, 'run_id']
-        #model_uri = f"runs:/{last_run_id}/artifacts/weights/best.pt"
-        #with mlflow.start_run(run_id=last_run_id):
+        # experiment = mlflow.get_experiment_by_name(self.mlflow_experiment_name)
+        # runs_ordered_by_end_time = mlflow.search_runs([experiment.experiment_id], order_by=["end_time DESC"])
+        # last_run_id = runs_ordered_by_end_time.loc[0, 'run_id']
+        # model_uri = f"runs:/{last_run_id}/artifacts/weights/best.pt"
+        # with mlflow.start_run(run_id=last_run_id):
         #    mlflow.log_params(self.__dict__)
-        #mlflow.register_model(model_uri, "Single yolo model trained")
+        # mlflow.register_model(model_uri, "Single yolo model trained")
         return model
 
     def _augmentations(self):
@@ -208,10 +211,16 @@ class TrainingScript:
         self.dataset_path.mkdir(parents=True, exist_ok=True)
         self.save_path.mkdir(parents=True, exist_ok=True)
         os.system(f'gsutil -m cp -r "{self.images_bucket_path}" {str(self.dataset_path)}')
-        os.system(
-            f"curl -X GET {self.label_studio_project_url}/export\?exportType\=YOLO -H 'Authorization: Token {self.label_studio_token}' --output 'annotations.zip'"
-        )
-        os.system(f"unzip -o annotations -d {str(self.dataset_path)}")
+        if self.obb:
+            json_annotations_path = self.dataset_path / 'annotations.json'
+            self._export_annotations_from_label_studio("JSON", json_annotations_path)
+
+            print("Converting annotations to YOLO OBB format.")
+            self._convert_annotations_into_yolo_obb(json_annotations_path, self.dataset_path)
+        else:
+            self._export_annotations_from_label_studio("YOLO", "annotations.zip")
+            os.system(f"unzip -o annotations -d {str(self.dataset_path)}")
+
         with open(f"{self.dataset_path}/classes.txt", "r") as f:
             class_names = f.read().splitlines()
         yaml_data = {
@@ -229,6 +238,28 @@ class TrainingScript:
         for extension in [".jpg", ".jpeg", ".png"]:
             images.extend(sorted((self.dataset_path / images_path).rglob(f"*{extension}")))
         return class_names, images, annotations
+
+    def _export_annotations_from_label_studio(self, export_type, output_path):
+        os.system(
+            f"curl -X GET {self.label_studio_project_url}/export\?exportType\={export_type} -H 'Authorization: Token {self.label_studio_token}' --output '{str(output_path)}'"
+        )
+
+    def _convert_annotations_into_yolo_obb(self, json_annotations_path, output_dir_path):
+        label_config_path = str(self.dataset_path / 'label_config.json')
+        os.system(
+            f"curl -X GET {self.label_studio_project_url}/validate -H 'Authorization: Token {self.label_studio_token}' --output '{label_config_path}'"
+        )
+        with open(f"{label_config_path}", "r") as f:
+            raw_data = f.read()
+            data_as_json = json.loads(raw_data)
+            label_config = data_as_json['label_config']
+
+        converter = Converter(config=label_config, project_dir='.')
+        converter.convert_to_yolo(
+            input_data=str(json_annotations_path),
+            is_dir=False,
+            output_dir=str(output_dir_path),
+            is_obb=True)
 
     def _prevent_multi_gpu_training(self):
         logging.info(f"Checking RANK: {self.rank}")

@@ -38,6 +38,7 @@ class TrainingJob:
             "IMAGE_SIZE": str(training_config.image_size),
             "EPOCHS": str(training_config.epochs),
             "MODEL": str(training_config.model),
+            "OBB": str(training_config.obb),
             "LABEL_STUDIO_TOKEN": str(training_config.label_studio_token),
             "LABEL_STUDIO_PROJECT_URL": str(training_config.label_studio_project_url),
             "IMAGES_BUCKET_PATH": str(training_config.images_bucket_path),

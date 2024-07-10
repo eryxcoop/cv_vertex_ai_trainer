@@ -28,3 +28,9 @@ Create a `.toml` file following the example on `config_example.toml`
 Run `cv-vertex-ai-trainer -c config.toml` to start training on the cloud. 
 
 Add `--local` to run the training locally.
+
+## Training with OBB
+
+When training with OBB (Oriented Bounding Box) you need to uncomment the line in `train_requirements.txt` that installs Ultralytics from a forked repository. This is TEMPORARY until the original repository fully supports OBB. 
+
+Then you need to set the `obb` parameter to `true` in the configuration file, and pick a suitable YOLO model (for example `yolov8n-obb.pt`).
