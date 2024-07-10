@@ -17,6 +17,7 @@ use_kfold = true
 number_of_folds = 2
 epochs = 1
 model = "yolov8n.pt"
+obb = false # Set to true when training an oriented bounding box model, see README for more details.
 image_size = "960, 540"
 
 [mlflow]
