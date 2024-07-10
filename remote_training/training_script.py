@@ -191,6 +191,7 @@ class TrainingScript:
                     "path": f"{self.base_path}/{model_info_dir.as_posix()}",
                     "train": "train",
                     "val": "val",
+                    "kpt_shape": [len(class_names) - 1, 3],
                     "names": class_names,
                 },
                 ds_y,
@@ -220,14 +221,14 @@ class TrainingScript:
             class_names = f.read().splitlines()
         yaml_data = {
             "names": class_names,
-            "nc": 1,
+            "nc": len(class_names),
             "kpt_shape": [len(class_names) - 1, 3],
             "train": f"{self.base_path}/{self.dataset_path}/train",
             "val": f"{self.base_path}/{self.dataset_path}/val",
         }
         yaml_file_path = f"{self.dataset_path}/data.yaml"
         with open(yaml_file_path, "w") as yaml_file:
-            yaml.dump(yaml_data, yaml_file, default_flow_style=False)
+            yaml.dump(yaml_data, yaml_file)
         annotations = sorted(self.dataset_path.rglob("*labels/*.txt"))
         images = []
         images_path = self.images_bucket_path.split("/")[-1]
@@ -250,11 +251,11 @@ class TrainingScript:
                         yolo_annotation = self._convert_annotation_to_yolo(res['value'])
                         annotation_type = res['type']
                         annotation_class = class_names.index(res['value'][annotation_type][0])
-                        if annotation_class == 8:
+                        if annotation_class == 8: # TODO fix
                             object_annotation = yolo_annotation
                         else:
-                            kp_annotations_list[annotation_class-1] = [yolo_annotation[0], yolo_annotation[1], 1]
-                    line = f"0 {' '.join(map(str, object_annotation))} "
+                            kp_annotations_list[annotation_class-1] = [yolo_annotation[0], yolo_annotation[1], 2]
+                    line = f"8 {' '.join(map(str, object_annotation))} " # TODO fix
                     for idx, kp_annotation in enumerate(kp_annotations_list):
                         line += f"{' '.join(map(str, kp_annotation))}"
                         if idx < (len(kp_annotations_list) - 1):

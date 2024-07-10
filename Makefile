@@ -24,4 +24,5 @@ local.run: local.clean
 local.clean:
 	rm -rf dataset/
 	rm -f annotations.zip
+	rm -f annotations.json
 	rm -f yolov8n.pt
