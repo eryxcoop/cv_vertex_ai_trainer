@@ -1,7 +1,8 @@
 [google_cloud]
 project = "project-id" # The project ID can be found in the GCP console https://console.cloud.google.com/
-bucket = "destination-bucket-name" # The bucket where the output data will be stored. Should follow the format "gs://bucket-name".
-images_bucket = "source-images-bucket-name" # The bucket containing the input images. Should follow the format "gs://bucket-name/folder".
+trained_models_bucket = "trained-models-bucket-name" # The bucket name where the output data will be stored.
+source_images_bucket = "source-images-bucket-name" # The bucket name containing the input images for training.
+source_images_directory = "source-images-directory" # The directory containing the input images for training, inside the source images bucket.
 
 [vertex_ai_machine_config]
 machine_type = "n1-standard-4" # The type of machine to use. Refer to: https://cloud.google.com/vertex-ai/docs/training/configure-compute#machine-types
@@ -9,7 +10,8 @@ accelerator_type = "NVIDIA_TESLA_T4" # The type of accelerator to use. Refer to:
 accelerator_count = 1 # Number of accelerators
 
 [label_studio]
-project_url = "project-url" # This is the project API URL, for example: "https://label-studio.example.com/api/projects/1"
+project_id = 1 # The ID of the Label Studio project, can be found in the URL of the project page.
+url = "https://label-studio.k8s.eryx.co/" # The URL of the Label Studio instance (with an ending /).
 token = "token" # The token to authenticate with the Label Studio API, refer to: https://api.labelstud.io/api-reference/introduction/getting-started#authentication
 
 [training]

@@ -1,6 +1,5 @@
 import datetime
 import gc
-import json
 import logging
 import os
 import shutil
@@ -19,6 +18,8 @@ from sklearn.model_selection import KFold
 os.environ["RANK"] = "-1"
 from ultralytics import YOLO
 from label_studio_sdk.converter import Converter
+from label_studio_sdk import Client as LabelStudioClient
+from google.cloud import storage
 
 
 class TrainingScript:
@@ -27,32 +28,39 @@ class TrainingScript:
         self.epochs = int(os.environ["EPOCHS"])
         self.model = os.environ["MODEL"]
         self.obb = os.environ["OBB"] == "True"
-        self.label_studio_token = os.environ["LABEL_STUDIO_TOKEN"]
-        self.label_studio_project_url = os.environ["LABEL_STUDIO_PROJECT_URL"]
-        self.images_bucket_path = os.environ["IMAGES_BUCKET_PATH"]
         self.base_path = os.getcwd()
-        self.bucket_path = os.environ["BUCKET_PATH"]
         self.dataset_path = Path("dataset")
         self.number_folds = int(os.environ["NUMBER_OF_FOLDS"])
         self.use_kfold = (os.environ["USE_KFOLD"] == "True")
         self.save_path = self._define_save_path()
-        self.accelerator_count = int(os.environ["ACCELERATOR_COUNT"])
-        self.rank = os.environ["RANK"]
         self.training_results_path = self.save_path / "training_results"
         self.fold_datasets_path = self.save_path / "folds_datasets"
         self.single_dataset_path = self.save_path / "single_dataset"
         self.mlflow_experiment_name = os.environ["MLFLOW_EXPERIMENT_NAME"]
+        self.accelerator_count = int(os.environ["ACCELERATOR_COUNT"])
+        self.rank = os.environ["RANK"]
+
+        self.label_studio_url = os.environ["LABEL_STUDIO_URL"]
+        self.label_studio_token = os.environ["LABEL_STUDIO_TOKEN"]
+        self.label_studio_project_id = int(os.environ["LABEL_STUDIO_PROJECT_ID"])
+        label_studio = LabelStudioClient(url=self.label_studio_url, api_key=self.label_studio_token)
+        self.label_studio_project = label_studio.get_project(self.label_studio_project_id)
+
+        google_cloud_client = storage.Client()
+        self.source_images_bucket = google_cloud_client.get_bucket(os.environ["SOURCE_IMAGES_BUCKET"])
+        self.source_images_directory = Path(os.environ["SOURCE_IMAGES_DIRECTORY"])
+        self.trained_models_bucket_name = os.environ['TRAINED_MODELS_BUCKET']
 
     def run(self):
         self._check_if_gpu_is_available()
         self._prevent_multi_gpu_training()
 
-        class_names, images, annotations = self._download_dataset()
-        images, annotations = self._match_images_and_annotations(images, annotations)
-        datasets_path = self.fold_datasets_path if self.use_kfold else self.single_dataset_path
+        class_names, annotations = self._download_dataset_annotations()
+        images = self._download_labeled_dataset_images()
 
         if self.use_kfold:
-            dataset_yaml_list = self._create_k_folds(annotations, class_names, images, datasets_path)
+            dataset_path = self.fold_datasets_path
+            dataset_yaml_list = self._create_k_folds(annotations, class_names, images, dataset_path)
             for fold_number in range(len(dataset_yaml_list)):
                 dataset_yaml = dataset_yaml_list[fold_number]
                 model_name = self._fold_name(fold_number)
@@ -60,7 +68,8 @@ class TrainingScript:
                 self._save_model_metrics(model_name, model)
                 self._clean_gpu_cache()  # This is necessary to avoid running out of memory
         else:
-            dataset_yaml = self._create_single_dataset(annotations, class_names, images, datasets_path)
+            dataset_path = self.single_dataset_path
+            dataset_yaml = self._create_single_dataset(annotations, class_names, images, dataset_path)
             model_name = "single_model"
             model = self._train_model(dataset_yaml, model_name)
             self._save_model_metrics(model_name, model)
@@ -68,7 +77,7 @@ class TrainingScript:
         self._export_results()
 
     def _export_results(self):
-        os.system(f'gsutil -m cp -r "{self.save_path}" "{self.bucket_path}"')
+        os.system(f'gsutil -m cp -r "{self.save_path}" "gs://{self.trained_models_bucket_name}"')
 
     def _save_model_metrics(self, fold_name, model):
         metrics = model.metrics.box
@@ -207,19 +216,18 @@ class TrainingScript:
         shutil.copy(first_label, datasets_path / folder_name / 'val' / "labels" / first_label.name)
         return dataset_yaml
 
-    def _download_dataset(self):
+    def _download_dataset_annotations(self):
         self.dataset_path.mkdir(parents=True, exist_ok=True)
         self.save_path.mkdir(parents=True, exist_ok=True)
-        os.system(f'gsutil -m cp -r "{self.images_bucket_path}" {str(self.dataset_path)}')
+
         if self.obb:
             json_annotations_path = self.dataset_path / 'annotations.json'
             self._export_annotations_from_label_studio("JSON", json_annotations_path)
-
-            print("Converting annotations to YOLO OBB format.")
             self._convert_annotations_into_yolo_obb(json_annotations_path, self.dataset_path)
         else:
-            self._export_annotations_from_label_studio("YOLO", "annotations.zip")
-            os.system(f"unzip -o annotations -d {str(self.dataset_path)}")
+            yolo_annotations_path = self.dataset_path / "annotations.zip"
+            self._export_annotations_from_label_studio("YOLO", yolo_annotations_path)
+            shutil.unpack_archive(yolo_annotations_path, extract_dir=self.dataset_path)
 
         with open(f"{self.dataset_path}/classes.txt", "r") as f:
             class_names = f.read().splitlines()
@@ -232,27 +240,36 @@ class TrainingScript:
         yaml_file_path = f"{self.dataset_path}/data.yaml"
         with open(yaml_file_path, "w") as yaml_file:
             yaml.dump(yaml_data, yaml_file, default_flow_style=False)
-        annotations = sorted(self.dataset_path.rglob("*labels/*.txt"))
-        images = []
-        images_path = self.images_bucket_path.split("/")[-1]
-        for extension in [".jpg", ".jpeg", ".png"]:
-            images.extend(sorted((self.dataset_path / images_path).rglob(f"*{extension}")))
-        return class_names, images, annotations
+
+        labels_path = self.dataset_path / "labels"
+        annotations = sorted(labels_path.rglob("*.txt"))
+        return class_names, annotations
+
+    def _download_labeled_dataset_images(self):
+        labeled_tasks = self.label_studio_project.get_labeled_tasks()
+        labeled_image_names = list(map(lambda task:
+                                       Path(task['data']['image']).name,
+                                       labeled_tasks))
+
+        all_dataset_image_paths = []
+        for image_name in labeled_image_names:
+            source_image_path = self.source_images_directory / image_name
+            destination_image_path = self.dataset_path / image_name
+            all_dataset_image_paths.append(destination_image_path)
+
+            google_cloud_image = self.source_images_bucket.blob(str(source_image_path))
+            google_cloud_image.download_to_filename(destination_image_path)
+
+        return sorted(all_dataset_image_paths)
 
     def _export_annotations_from_label_studio(self, export_type, output_path):
         os.system(
-            f"curl -X GET {self.label_studio_project_url}/export\?exportType\={export_type} -H 'Authorization: Token {self.label_studio_token}' --output '{str(output_path)}'"
+            f"curl -X GET {self.label_studio_url}api/projects/{self.label_studio_project_id}/export\?exportType\={export_type} \
+            -H 'Authorization: Token {self.label_studio_token}' --output '{str(output_path)}'"
         )
 
     def _convert_annotations_into_yolo_obb(self, json_annotations_path, output_dir_path):
-        label_config_path = str(self.dataset_path / 'label_config.json')
-        os.system(
-            f"curl -X GET {self.label_studio_project_url}/validate -H 'Authorization: Token {self.label_studio_token}' --output '{label_config_path}'"
-        )
-        with open(f"{label_config_path}", "r") as f:
-            raw_data = f.read()
-            data_as_json = json.loads(raw_data)
-            label_config = data_as_json['label_config']
+        label_config = self.label_studio_project.parsed_label_config
 
         converter = Converter(config=label_config, project_dir='.')
         converter.convert_to_yolo(
@@ -315,13 +332,6 @@ class TrainingScript:
             ratio = val_totals / (train_totals + 1e-7)
             fold_label_distribution.loc[self._fold_name(n)] = ratio
         return fold_label_distribution
-
-    def _match_images_and_annotations(self, images, annotations):
-        annotations_stems = [annotation.stem for annotation in annotations]
-        images_stems = [image.stem for image in images]
-        images_with_annotation = [image for image in images if image.stem in annotations_stems]
-        annotations_with_image = [annotation for annotation in annotations if annotation.stem in images_stems]
-        return images_with_annotation, annotations_with_image
 
     def _clean_gpu_cache(self):
         if self._check_if_gpu_is_available():
