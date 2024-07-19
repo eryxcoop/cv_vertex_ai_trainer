@@ -28,14 +28,14 @@ class PreannotateImages:
         self.filter_function_for_tasks = filter_function_for_tasks
 
     def run(self):
-        #local_images_directory = self._get_images_from_bucket()
+        local_images_directory = self._get_images_from_bucket()
         tasks = self._get_unlabeled_tasks_from_project()
         filtered_tasks = list(filter(self.filter_function_for_tasks, tasks))
-        #model = YOLO(self.model_path)
-        #self._create_folder_with_images_and_yolo_labels(local_images_directory, filtered_tasks, model)
+        model = YOLO(self.model_path)
+        self._create_folder_with_images_and_yolo_labels(local_images_directory, filtered_tasks, model)
 
         # falta crear classes.txt, lo voy a hacer a mano
-        #convert_yolo_to_ls('yolo_predictions/prediction', 'annotations.json')
+        convert_yolo_to_ls('yolo_predictions/prediction', 'annotations.json')
         self._push_annotations(filtered_tasks)
 
     # PRIVATE
