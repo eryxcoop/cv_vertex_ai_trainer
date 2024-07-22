@@ -41,12 +41,12 @@ class PreannotateImages:
     # PRIVATE
     def _get_images_from_bucket(self):
         local_images_directory = self._create_local_images_and_annotations_directory()
-        # self._copy_all_images(self.source_images_bucket, local_images_directory)
+        self._copy_all_images(self.source_images_bucket, local_images_directory)
         return local_images_directory
 
     def _create_local_images_and_annotations_directory(self):
         local_images_directory = Path("all_images")
-        # local_images_directory.mkdir(exist_ok=True)
+        local_images_directory.mkdir(exist_ok=True)
         return local_images_directory
 
     def _copy_all_images(self, source_directory, destination_directory):
@@ -75,7 +75,7 @@ class PreannotateImages:
 
         dict_with_annotations = {}
         for annotation in annotations:
-            name = annotation['data']['image'].split("/")[-1].split('.png')[0]  # Aca ?d=/ intenta splitear el path local donde busca el archivo. Quizas haya que tocarlo
+            name = annotation['data']['image'].split("/")[-1].split('.png')[0]
             if 'annotations' in annotation:
                 dict_with_annotations[name] = annotation['annotations'][0]['result']
 
