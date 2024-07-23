@@ -36,7 +36,10 @@ class PreannotateImages:
         model = YOLO(self.model_path)
         self._create_folder_with_images_and_yolo_labels(local_images_directory, filtered_tasks, model)
 
-        # falta crear classes.txt, lo voy a hacer a mano
+        labels_as_list = self.label_studio.get_project(self.project_id).parsed_label_config['label']['labels']
+        with open('yolo_predictions/prediction/classes.txt', 'w') as file:
+            for label in labels_as_list:
+                file.write(label + '\n')
         convert_yolo_to_ls('yolo_predictions/prediction', 'annotations.json')
         self._push_annotations(filtered_tasks)
 
