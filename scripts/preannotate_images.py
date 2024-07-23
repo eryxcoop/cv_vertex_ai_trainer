@@ -7,15 +7,17 @@ from label_studio_sdk import Client
 from label_studio_sdk.converter.imports.yolo import convert_yolo_to_ls
 from ultralytics import YOLO
 
-LABEL_STUDIO_URL = 'https://label-studio.k8s.eryx.co/'
-API_KEY = 'b410fa7dd326c8142a1904de95d232db485ab5ca'
+LABEL_STUDIO_URL = 'label-studio-url'
+API_KEY = 'api-key'
 PROJECT_ID = 35  # Can be found in the URL of the project in Label Studio.
 
-SOURCE_IMAGES_BUCKET = 'gs://eryx-toyota-bucket/tenaris-pipes/tenaris_merge_1707'
+SOURCE_IMAGES_BUCKET = 'source_images_bucket'
 
-MODEL_PATH = 'best_tenaris_17jul.pt'
+MODEL_PATH = 'model_path'
 
-FILTER_FUNCTION_FOR_TASKS = lambda task: 'frame' in task['storage_filename']
+
+def storage_filename_contains_frame(task):
+    return 'frame' in task['storage_filename']
 
 
 class PreannotateImages:
@@ -93,6 +95,6 @@ if __name__ == "__main__":
         project_id=PROJECT_ID,
         source_images_bucket=SOURCE_IMAGES_BUCKET,
         model_path=MODEL_PATH,
-        filter_function_for_tasks=FILTER_FUNCTION_FOR_TASKS
+        filter_function_for_tasks=storage_filename_contains_frame
     )
     preannotate_images.run()
