@@ -41,7 +41,7 @@ class PreannotateImages:
         predictions_folder = 'yolo_predictions/prediction'
         self._write_classes_file(labels_as_list, predictions_folder)
 
-        convert_yolo_to_ls(predictions_folder, 'annotations.json')
+        convert_yolo_to_ls(predictions_folder, 'annotations.json') # convert yolo labels to label studio annotations
 
         self._push_annotations(filtered_tasks)
 
