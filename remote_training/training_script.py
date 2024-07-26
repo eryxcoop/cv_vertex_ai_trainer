@@ -7,7 +7,7 @@ import shutil
 from collections import Counter
 from pathlib import Path
 
-# import mlflow
+import mlflow
 import pandas as pd
 import torch
 import yaml
@@ -41,6 +41,7 @@ class TrainingScript:
         self.training_results_path = self.save_path / "training_results"
         self.fold_datasets_path = self.save_path / "folds_datasets"
         self.single_dataset_path = self.save_path / "single_dataset"
+        self.mlflow_model_name = os.environ["MLFLOW_MODEL_NAME"]
         self.mlflow_experiment_name = os.environ["MLFLOW_EXPERIMENT_NAME"]
 
     def run(self):
@@ -57,12 +58,14 @@ class TrainingScript:
                 dataset_yaml = dataset_yaml_list[fold_number]
                 model_name = self._fold_name(fold_number)
                 model = self._train_model(dataset_yaml, model_name)
+                self._add_information_to_model_in_mlflow()
                 self._save_model_metrics(model_name, model)
                 self._clean_gpu_cache()  # This is necessary to avoid running out of memory
         else:
             dataset_yaml = self._create_single_dataset(annotations, class_names, images, datasets_path)
             model_name = "single_model"
             model = self._train_model(dataset_yaml, model_name)
+            self._add_information_to_model_in_mlflow()
             self._save_model_metrics(model_name, model)
 
         self._export_results()
@@ -95,14 +98,16 @@ class TrainingScript:
             name=model_name,
             **augmentations,
         )
-        # experiment = mlflow.get_experiment_by_name(self.mlflow_experiment_name)
-        # runs_ordered_by_end_time = mlflow.search_runs([experiment.experiment_id], order_by=["end_time DESC"])
-        # last_run_id = runs_ordered_by_end_time.loc[0, 'run_id']
-        # model_uri = f"runs:/{last_run_id}/artifacts/weights/best.pt"
-        # with mlflow.start_run(run_id=last_run_id):
-        #    mlflow.log_params(self.__dict__)
-        # mlflow.register_model(model_uri, "Single yolo model trained")
         return model
+
+    def _add_information_to_model_in_mlflow(self):
+        experiment = mlflow.get_experiment_by_name(self.mlflow_experiment_name)
+        runs_ordered_by_end_time = mlflow.search_runs([experiment.experiment_id], order_by=["end_time DESC"])
+        last_run_id = runs_ordered_by_end_time.loc[0, 'run_id']
+        model_uri = f"runs:/{last_run_id}/artifacts/weights/best.pt"
+        with mlflow.start_run(run_id=last_run_id):
+            mlflow.log_params(self.__dict__)
+        mlflow.register_model(model_uri, self.mlflow_model_name)
 
     def _augmentations(self):
         augmentations = {
