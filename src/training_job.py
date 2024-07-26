@@ -14,7 +14,7 @@ class TrainingJob:
         self.accelerator_count = accelerator_count
         self.training_config = training_config
 
-        aiplatform.init(project=self.gc_project, staging_bucket=self.gc_bucket)
+        aiplatform.init(project=self.gc_project, staging_bucket=f"gs://{self.gc_bucket}")
 
         self.job = aiplatform.CustomTrainingJob(
             display_name=self.DEFAULT_JOB_NAME,
@@ -40,9 +40,8 @@ class TrainingJob:
             "MODEL": str(training_config.model),
             "OBB": str(training_config.obb),
             "LABEL_STUDIO_TOKEN": str(training_config.label_studio_token),
-            "LABEL_STUDIO_PROJECT_URL": str(training_config.label_studio_project_url),
-            "IMAGES_BUCKET_PATH": str(training_config.images_bucket_path),
-            "BUCKET_PATH": str(training_config.bucket_path),
+            "LABEL_STUDIO_URL": str(training_config.label_studio_url),
+            "LABEL_STUDIO_PROJECT_ID": str(training_config.label_studio_project_id),
             "NUMBER_OF_FOLDS": str(training_config.number_of_folds),
             "ACCELERATOR_COUNT": str(training_config.accelerator_count),
             "USE_KFOLD": str(training_config.use_kfold),
@@ -50,7 +49,10 @@ class TrainingJob:
             "MLFLOW_EXPERIMENT_NAME": str(training_config.mlflow_experiment_name),
             "MLFLOW_RUN": str(training_config.mlflow_run),
             "MLFLOW_TRACKING_USERNAME": str(training_config.mlflow_tracking_username),
-            "MLFLOW_TRACKING_PASSWORD": str(training_config.mlflow_tracking_password)
+            "MLFLOW_TRACKING_PASSWORD": str(training_config.mlflow_tracking_password),
+            "SOURCE_IMAGES_BUCKET": str(training_config.source_images_bucket),
+            "SOURCE_IMAGES_DIRECTORY": str(training_config.source_images_directory),
+            "TRAINED_MODELS_BUCKET": str(training_config.trained_models_bucket),
         }
 
     def _load_requirements(self) -> list[str]:
