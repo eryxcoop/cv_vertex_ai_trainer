@@ -31,17 +31,17 @@ class PreannotateImages:
 
     def run(self):
         local_images_directory = self._get_images_from_bucket()
-        tasks = self._get_unlabeled_tasks_from_project()
-        filtered_tasks = list(filter(self.filter_function_for_tasks, tasks))
+        tasks_without_annotations = self._get_unlabeled_tasks_from_project()
+        filtered_tasks = list(filter(self.filter_function_for_tasks, tasks_without_annotations))
 
         model = YOLO(self.model_path)
-        self._create_folder_with_images_and_yolo_labels(local_images_directory, filtered_tasks, model)
+        self._create_folder_with_images_and_yolo_annotations(local_images_directory, filtered_tasks, model)
 
-        labels_as_list = self.label_studio.get_project(self.project_id).parsed_label_config['label']['labels']
+        classes_as_list = self.label_studio.get_project(self.project_id).parsed_label_config['label']['labels']
         predictions_folder = 'yolo_predictions/prediction'
-        self._write_classes_file(labels_as_list, predictions_folder)
+        self._write_classes_file(classes_as_list, predictions_folder)
 
-        convert_yolo_to_ls(predictions_folder, 'annotations.json') # convert yolo labels to label studio annotations
+        convert_yolo_to_ls(predictions_folder, 'annotations.json')  # convert yolo annotations to label studio annotations
 
         self._push_annotations(filtered_tasks)
 
@@ -65,7 +65,7 @@ class PreannotateImages:
 
         return tasks_as_json
 
-    def _create_folder_with_images_and_yolo_labels(self, local_images_directory, filtered_tasks, model):
+    def _create_folder_with_images_and_yolo_annotations(self, local_images_directory, filtered_tasks, model):
         os.makedirs("yolo_predictions/prediction/images", exist_ok=True)
         for task in filtered_tasks:
             image_name = task['storage_filename'].split('/')[-1]
@@ -74,10 +74,10 @@ class PreannotateImages:
                 model.predict(image, save_txt=True, project='yolo_predictions', name='prediction', exist_ok=True)
                 os.system(f'cp {str(image_path)} yolo_predictions/prediction/images/{str(image_path).split("/")[-1]}')
 
-    def _write_classes_file(self, labels_as_list, predictions_folder):
+    def _write_classes_file(self, classes_list, predictions_folder):
         with open(f'{predictions_folder}/classes.txt', 'w') as file:
-            for label in labels_as_list:
-                file.write(f'{label}\n')
+            for a_class in classes_list:
+                file.write(f'{a_class}\n')
 
     def _push_annotations(self, tasks_to_annotate):
         annotations_filename = 'annotations.json'
