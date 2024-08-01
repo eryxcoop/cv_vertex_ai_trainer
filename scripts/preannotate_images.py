@@ -38,12 +38,15 @@ class PreannotateImages:
         predictions_path = self._create_folder_with_images_and_yolo_annotations(local_images_directory, filtered_tasks,
                                                                                 model)
 
-        classes_as_list = self.label_studio.get_project(self.project_id).parsed_label_config['label']['labels']
+        classes_as_list = self._get_classes_used_on_label_studio_annotations()
         self._write_classes_file(classes_as_list, predictions_path)
 
         annotations_filename = self._convert_yolo_annotations_to_label_studio(predictions_path)
 
         self._push_annotations(filtered_tasks, annotations_filename)
+
+    def _get_classes_used_on_label_studio_annotations(self):
+        return self.label_studio.get_project(self.project_id).parsed_label_config['label']['labels']
 
     # PRIVATE
     def _get_images_from_bucket(self):
