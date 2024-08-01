@@ -348,12 +348,22 @@ class TrainingScript:
 
     def _add_information_to_model_in_mlflow(self):
         experiment = mlflow.get_experiment_by_name(self.mlflow_experiment_name)
+        last_run_id = self._get_last_run_id_for(experiment)
+        with mlflow.start_run(run_id=last_run_id):
+            # It is restarting the run that YOLO started. We want to add some information to it
+            mlflow.log_params(self.__dict__)
+
+        model_uri = self._get_model_uri_for(last_run_id)
+        mlflow.register_model(model_uri, self.mlflow_model_name)
+
+    def _get_model_uri_for(self, last_run_id):
+        model_uri = f"runs:/{last_run_id}/artifacts/weights/best.pt"
+        return model_uri
+
+    def _get_last_run_id_for(self, experiment):
         runs_ordered_by_end_time = mlflow.search_runs([experiment.experiment_id], order_by=["end_time DESC"])
         last_run_id = runs_ordered_by_end_time.loc[0, 'run_id']
-        model_uri = f"runs:/{last_run_id}/artifacts/weights/best.pt"
-        with mlflow.start_run(run_id=last_run_id):
-            mlflow.log_params(self.__dict__)
-        mlflow.register_model(model_uri, self.mlflow_model_name)
+        return last_run_id
 
 
 if __name__ == "__main__":
