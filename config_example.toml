@@ -25,6 +25,7 @@ image_size = "960, 540"
 [mlflow]
 tracking_uri = "http://127.0.0.1:5000"
 experiment_name = "experiment-name"
+model_name = "model-name"
 run = "run-name"
 user = "user"
 password = "password"
