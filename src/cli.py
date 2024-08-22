@@ -69,6 +69,7 @@ class CLI:
             number_of_folds=config["training"]["number_of_folds"],
             use_kfold=config["training"]["use_kfold"],
             accelerator_count=config["vertex_ai_machine_config"]["accelerator_count"],
+            use_mlflow=config["mlflow"]["use_mlflow"],
             mlflow_tracking_uri=config["mlflow"]["tracking_uri"],
             mlflow_experiment_name=config["mlflow"]["experiment_name"],
             mlflow_model_name=config["mlflow"]["model_name"],
@@ -110,8 +111,9 @@ class CLI:
             "LABEL_STUDIO_URL": str(training_config.label_studio_url),
             "LABEL_STUDIO_PROJECT_ID": str(training_config.label_studio_project_id),
             "NUMBER_OF_FOLDS": str(training_config.number_of_folds),
-            "USE_KFOLD": str(training_config.use_kfold),
             "ACCELERATOR_COUNT": str(training_config.accelerator_count),
+            "USE_KFOLD": str(training_config.use_kfold),
+            "USE_MLFLOW": str(training_config.use_mlflow),
             "MLFLOW_TRACKING_URI": str(training_config.mlflow_tracking_uri),
             "MLFLOW_EXPERIMENT_NAME": str(training_config.mlflow_experiment_name),
             "MLFLOW_MODEL_NAME": str(training_config.mlflow_model_name),
@@ -136,6 +138,7 @@ class TrainingConfig:
     number_of_folds: int
     use_kfold: bool
     accelerator_count: int
+    use_mlflow: bool
     mlflow_tracking_uri: str
     mlflow_experiment_name: str
     mlflow_model_name: str
