@@ -59,26 +59,26 @@ class CLI:
 
     def _training_config(self, config):
         return TrainingConfig(
-            label_studio_token=config["label_studio"]["token"],
-            label_studio_url=config["label_studio"]["url"],
-            label_studio_project_id=config["label_studio"]["project_id"],
-            image_size=config["training"]["image_size"],
-            epochs=config["training"]["epochs"],
-            model=config["training"]["model"],
-            obb=config["training"]["obb"],
-            number_of_folds=config["training"]["number_of_folds"],
-            use_kfold=config["training"]["use_kfold"],
-            accelerator_count=config["vertex_ai_machine_config"]["accelerator_count"],
-            use_mlflow=config["mlflow"]["use_mlflow"],
-            mlflow_tracking_uri=config["mlflow"]["tracking_uri"],
-            mlflow_experiment_name=config["mlflow"]["experiment_name"],
-            mlflow_model_name=config["mlflow"]["model_name"],
-            mlflow_run=config["mlflow"]["run"],
-            mlflow_tracking_username=config["mlflow"]["user"],
-            mlflow_tracking_password=config["mlflow"]["password"],
-            source_images_bucket=config["google_cloud"]["source_images_bucket"],
-            source_images_directory=config["google_cloud"]["source_images_directory"],
-            trained_models_bucket=config["google_cloud"]["trained_models_bucket"],
+            label_studio_token=config["label_studio"].get("token"),
+            label_studio_url=config["label_studio"].get("url"),
+            label_studio_project_id=config["label_studio"].get("project_id"),
+            image_size=config["training"].get("image_size"),
+            epochs=config["training"].get("epochs"),
+            model=config["training"].get("model"),
+            obb=config["training"].get("obb"),
+            number_of_folds=config["training"].get("number_of_folds"),
+            use_kfold=config["training"].get("use_kfold"),
+            accelerator_count=config["vertex_ai_machine_config"].get("accelerator_count"),
+            use_mlflow=config["mlflow"].get("use_mlflow"),
+            mlflow_tracking_uri=config["mlflow"].get("tracking_uri"),
+            mlflow_experiment_name=config["mlflow"].get("experiment_name"),
+            mlflow_model_name=config["mlflow"].get("model_name"),
+            mlflow_run=config["mlflow"].get("run"),
+            mlflow_tracking_username=config["mlflow"].get("user"),
+            mlflow_tracking_password=config["mlflow"].get("password"),
+            source_images_bucket=config["google_cloud"].get("source_images_bucket"),
+            source_images_directory=config["google_cloud"].get("source_images_directory"),
+            trained_models_bucket=config["google_cloud"].get("trained_models_bucket"),
         )
 
     def _run_remote(self, config, training_config):
@@ -126,28 +126,41 @@ class CLI:
         }
 
 
+REQUIRED_FIELD = "y8oTTtOwVyVfvDpyqJCRKyMXKRrVpoI5g5X8M1dsBTKJHTEsogOOrgKuPgML7uwy"
+
+
 @dataclass
 class TrainingConfig:
-    image_size: str
-    epochs: int
-    model: str
-    obb: bool
-    label_studio_token: str
-    label_studio_url: str
-    label_studio_project_id: str
     number_of_folds: int
-    use_kfold: bool
-    accelerator_count: int
-    use_mlflow: bool
     mlflow_tracking_uri: str
     mlflow_experiment_name: str
     mlflow_model_name: str
     mlflow_run: str
     mlflow_tracking_username: str
     mlflow_tracking_password: str
-    source_images_bucket: str
-    source_images_directory: str
-    trained_models_bucket: str
+    image_size: str = REQUIRED_FIELD
+    epochs: int = REQUIRED_FIELD
+    model: str = REQUIRED_FIELD
+    label_studio_token: str = REQUIRED_FIELD
+    label_studio_url: str = REQUIRED_FIELD
+    label_studio_project_id: str = REQUIRED_FIELD
+    accelerator_count: int = REQUIRED_FIELD
+    source_images_bucket: str = REQUIRED_FIELD
+    source_images_directory: str = REQUIRED_FIELD
+    trained_models_bucket: str = REQUIRED_FIELD
+    obb: bool = False
+    use_kfold: bool = False
+    use_mlflow: bool = False
+
+    def __post_init__(self):
+        required_fields = ["image_size", "epochs", "model", "label_studio_token", "label_studio_url",
+                           "label_studio_project_id", "accelerator_count", "source_images_bucket",
+                           "source_images_directory", "trained_models_bucket"]
+
+        for field in required_fields:
+            attr = self.__getattribute__(field)
+            if attr is REQUIRED_FIELD or attr is None:
+                raise ValueError(f"{field} is required and must be set by the user.")
 
 
 def main():
