@@ -6,6 +6,7 @@ import shutil
 from collections import Counter
 from pathlib import Path
 
+import mlflow
 import pandas as pd
 import torch
 import ultralytics.utils
@@ -56,7 +57,8 @@ class TrainingScript:
         self.trained_models_bucket_name = os.environ['TRAINED_MODELS_BUCKET']
 
     def run(self):
-        self._import_mlflow_if_necccesary()
+        if not self.use_mlflow:
+            self._turn_off_mlflow_logging_on_yolo()
         self._check_if_gpu_is_available()
         self._prevent_multi_gpu_training()
 
@@ -297,8 +299,6 @@ class TrainingScript:
 
     def _train_model(self, dataset_yaml, model_name):
         augmentations = self._augmentations()
-        if not self.use_mlflow:
-            ultralytics.utils.SETTINGS["MLFLOW"] = False
         model = YOLO(self.model)
         model.train(
             data=dataset_yaml,
@@ -372,9 +372,9 @@ class TrainingScript:
         last_run_id = runs_ordered_by_end_time.loc[0, 'run_id']
         return last_run_id
 
-    def _import_mlflow_if_necccesary(self):
-        if self.use_mlflow:
-            pass
+    def _turn_off_mlflow_logging_on_yolo(self):
+        # This is a hacky way to avoid ultralytics using mlflow logging when we don't want it
+        ultralytics.utils.TESTS_RUNNING = True
 
 
 if __name__ == "__main__":
