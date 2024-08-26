@@ -126,9 +126,6 @@ class CLI:
         }
 
 
-REQUIRED_FIELD = "y8oTTtOwVyVfvDpyqJCRKyMXKRrVpoI5g5X8M1dsBTKJHTEsogOOrgKuPgML7uwy"
-
-
 @dataclass
 class TrainingConfig:
     number_of_folds: int
@@ -138,16 +135,16 @@ class TrainingConfig:
     mlflow_run: str
     mlflow_tracking_username: str
     mlflow_tracking_password: str
-    image_size: str = REQUIRED_FIELD
-    epochs: int = REQUIRED_FIELD
-    model: str = REQUIRED_FIELD
-    label_studio_token: str = REQUIRED_FIELD
-    label_studio_url: str = REQUIRED_FIELD
-    label_studio_project_id: str = REQUIRED_FIELD
-    accelerator_count: int = REQUIRED_FIELD
-    source_images_bucket: str = REQUIRED_FIELD
-    source_images_directory: str = REQUIRED_FIELD
-    trained_models_bucket: str = REQUIRED_FIELD
+    image_size: str
+    epochs: int
+    model: str
+    label_studio_token: str
+    label_studio_url: str
+    label_studio_project_id: str
+    accelerator_count: int
+    source_images_bucket: str
+    source_images_directory: str
+    trained_models_bucket: str
     obb: bool = False
     use_kfold: bool = False
     use_mlflow: bool = False
@@ -159,7 +156,7 @@ class TrainingConfig:
 
         for field in required_fields:
             attr = self.__getattribute__(field)
-            if attr is REQUIRED_FIELD or attr is None:
+            if attr is None:
                 raise ValueError(f"{field} is required and must be set by the user.")
 
 
