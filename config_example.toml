@@ -23,6 +23,7 @@ obb = false # Set to true when training an oriented bounding box model, see READ
 image_size = "960, 540"
 
 [mlflow]
+use_mlflow = false # Set to true when you want to save your model on MLFlow
 tracking_uri = "http://127.0.0.1:5000"
 experiment_name = "experiment-name"
 model_name = "model-name"

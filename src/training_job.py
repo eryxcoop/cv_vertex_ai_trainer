@@ -45,6 +45,7 @@ class TrainingJob:
             "NUMBER_OF_FOLDS": str(training_config.number_of_folds),
             "ACCELERATOR_COUNT": str(training_config.accelerator_count),
             "USE_KFOLD": str(training_config.use_kfold),
+            "USE_MLFLOW": str(training_config.use_mlflow),
             "MLFLOW_TRACKING_URI": str(training_config.mlflow_tracking_uri),
             "MLFLOW_EXPERIMENT_NAME": str(training_config.mlflow_experiment_name),
             "MLFLOW_MODEL_NAME": str(training_config.mlflow_model_name),

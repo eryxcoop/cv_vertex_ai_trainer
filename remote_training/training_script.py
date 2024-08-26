@@ -9,6 +9,7 @@ from pathlib import Path
 import mlflow
 import pandas as pd
 import torch
+import ultralytics.utils
 import yaml
 from sklearn.model_selection import KFold
 
@@ -36,8 +37,11 @@ class TrainingScript:
         self.training_results_path = self.save_path / "training_results"
         self.fold_datasets_path = self.save_path / "folds_datasets"
         self.single_dataset_path = self.save_path / "single_dataset"
+
+        self.use_mlflow = (os.environ["USE_MLFLOW"] == "True")
         self.mlflow_model_name = os.environ["MLFLOW_MODEL_NAME"]
         self.mlflow_experiment_name = os.environ["MLFLOW_EXPERIMENT_NAME"]
+
         self.accelerator_count = int(os.environ["ACCELERATOR_COUNT"])
         self.rank = os.environ["RANK"]
 
@@ -53,6 +57,8 @@ class TrainingScript:
         self.trained_models_bucket_name = os.environ['TRAINED_MODELS_BUCKET']
 
     def run(self):
+        if not self.use_mlflow:
+            self._turn_off_mlflow_logging_on_yolo()
         self._check_if_gpu_is_available()
         self._prevent_multi_gpu_training()
 
@@ -66,7 +72,7 @@ class TrainingScript:
                 dataset_yaml = dataset_yaml_list[fold_number]
                 model_name = self._fold_name(fold_number)
                 model = self._train_model(dataset_yaml, model_name)
-                self._add_information_to_model_in_mlflow()
+                self._add_information_to_model_in_mlflow_if_neccesary()
                 self._save_model_metrics(model_name, model)
                 self._clean_gpu_cache()  # This is necessary to avoid running out of memory
         else:
@@ -74,7 +80,7 @@ class TrainingScript:
             dataset_yaml = self._create_single_dataset(annotations, class_names, images, dataset_path)
             model_name = "single_model"
             model = self._train_model(dataset_yaml, model_name)
-            self._add_information_to_model_in_mlflow()
+            self._add_information_to_model_in_mlflow_if_neccesary()
             self._save_model_metrics(model_name, model)
 
         self._export_results()
@@ -346,15 +352,16 @@ class TrainingScript:
 
     # Mlflow
 
-    def _add_information_to_model_in_mlflow(self):
-        experiment = mlflow.get_experiment_by_name(self.mlflow_experiment_name)
-        last_run_id = self._get_last_run_id_for(experiment)
-        with mlflow.start_run(run_id=last_run_id):
-            # It is restarting the run that YOLO started. We want to add some information to it
-            mlflow.log_params(self.__dict__)
+    def _add_information_to_model_in_mlflow_if_neccesary(self):
+        if self.use_mlflow:
+            experiment = mlflow.get_experiment_by_name(self.mlflow_experiment_name)
+            last_run_id = self._get_last_run_id_for(experiment)
+            with mlflow.start_run(run_id=last_run_id):
+                # It is restarting the run that YOLO started. We want to add some information to it
+                mlflow.log_params(self.__dict__)
 
-        model_uri = self._get_model_uri_for(last_run_id)
-        mlflow.register_model(model_uri, self.mlflow_model_name)
+            model_uri = self._get_model_uri_for(last_run_id)
+            mlflow.register_model(model_uri, self.mlflow_model_name)
 
     def _get_model_uri_for(self, last_run_id):
         model_uri = f"runs:/{last_run_id}/artifacts/weights/best.pt"
@@ -364,6 +371,10 @@ class TrainingScript:
         runs_ordered_by_end_time = mlflow.search_runs([experiment.experiment_id], order_by=["end_time DESC"])
         last_run_id = runs_ordered_by_end_time.loc[0, 'run_id']
         return last_run_id
+
+    def _turn_off_mlflow_logging_on_yolo(self):
+        # This is a hacky way to avoid ultralytics using mlflow logging when we don't want it
+        ultralytics.utils.TESTS_RUNNING = True
 
 
 if __name__ == "__main__":
