@@ -166,13 +166,14 @@ class TrainingScript:
     def _download_labeled_dataset_images(self):
         labeled_tasks = self.label_studio_project.get_labeled_tasks()
         labeled_image_names = list(map(lambda task:
-                                       task['storage_filename'].split('images/')[1],
+                                       task['storage_filename'].split(str(self.source_images_directory) + "/")[1],
                                        labeled_tasks))
 
         all_dataset_image_paths = []
-        for image_name in labeled_image_names:
-            source_image_path = self.source_images_directory / image_name
-            destination_image_path = self.dataset_path / image_name.split("/")[-1]
+        for image_path in labeled_image_names:
+            image_name = image_path.replace("/", "_")
+            source_image_path = self.source_images_directory / image_path
+            destination_image_path = self.dataset_path / image_name
             all_dataset_image_paths.append(destination_image_path)
 
             google_cloud_image = self.source_images_bucket.blob(str(source_image_path))
