@@ -2,6 +2,7 @@ import datetime
 import gc
 import logging
 import os
+import random
 import shutil
 from collections import Counter
 from pathlib import Path
@@ -9,7 +10,6 @@ from pathlib import Path
 import mlflow
 import pandas as pd
 import torch
-import ultralytics.utils
 import yaml
 from sklearn.model_selection import KFold
 
@@ -17,6 +17,7 @@ from sklearn.model_selection import KFold
 # an env var, it still tries to do multi-gpu training. This is a workaround to avoid that.
 # It's necessary to do this before importing ultralytics
 os.environ["RANK"] = "-1"
+import ultralytics.utils
 from ultralytics import YOLO
 from label_studio_sdk.converter import Converter
 from label_studio_sdk import Client as LabelStudioClient
@@ -204,10 +205,14 @@ class TrainingScript:
             shutil.copy(image, datasets_path / folder_name / 'train' / "images" / image.name)
             shutil.copy(label, datasets_path / folder_name / 'train' / "labels" / label.name)
 
-        first_image = images[0]
-        first_label = annotations[0]
-        shutil.copy(first_image, datasets_path / folder_name / 'val' / "images" / first_image.name)
-        shutil.copy(first_label, datasets_path / folder_name / 'val' / "labels" / first_label.name)
+        for i in range(9):
+            random_image_index = random.randint(0, len(images) - 1)
+            validation_image = images[random_image_index]
+            validation_label = annotations[random_image_index]
+            shutil.move(validation_image, datasets_path / folder_name / 'val' / "images" / validation_image.name)
+            shutil.move(validation_label, datasets_path / folder_name / 'val' / "labels" / validation_label.name)
+            images.pop(random_image_index)
+            annotations.pop(random_image_index)
         return dataset_yaml
 
     def _create_k_folds(self, annotations, class_names, images, datasets_path):
