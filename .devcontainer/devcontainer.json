@@ -16,5 +16,5 @@
 			]
 		}
 	},
-  "postCreateCommand": "pip3 install -r /workspaces/adecoagro/requirements.txt"
+  "postCreateCommand": "pip3 install -r /workspaces/cv-vertex-ai-trainer/requirements.txt"
 }
