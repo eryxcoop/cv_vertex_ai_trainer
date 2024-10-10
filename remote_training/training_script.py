@@ -9,7 +9,6 @@ from pathlib import Path
 import mlflow
 import pandas as pd
 import torch
-import ultralytics.utils
 import yaml
 from sklearn.model_selection import KFold
 
@@ -17,6 +16,7 @@ from sklearn.model_selection import KFold
 # an env var, it still tries to do multi-gpu training. This is a workaround to avoid that.
 # It's necessary to do this before importing ultralytics
 os.environ["RANK"] = "-1"
+import ultralytics.utils
 from ultralytics import YOLO
 from label_studio_sdk.converter import Converter
 from label_studio_sdk import Client as LabelStudioClient
