@@ -168,8 +168,7 @@ class TrainingScript:
                                        labeled_tasks))
 
         all_dataset_image_paths = []
-        for image_name in labeled_image_names:
-            print(f"Downloading image: {image_name}")
+        for image_name in tqdm(labeled_image_names):
             source_image_path = self.source_images_directory / image_name
             destination_image_path = self.dataset_path / image_name
             all_dataset_image_paths.append(destination_image_path)
