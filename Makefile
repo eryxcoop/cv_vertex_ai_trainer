@@ -37,7 +37,7 @@ mostro.docker.run:
 		exit 1; \
 	else \
 		echo "Running with container_name: $(container_name)"; \
-		docker run -e PYTHONPATH=. --device nvidia.com/gpu=all --ipc=host ${DOCKER_IMAGE_NAME} --name ${container_name}; \
+		docker run -e PYTHONPATH=. --device nvidia.com/gpu=all --ipc=host --name ${container_name} ${DOCKER_IMAGE_NAME}; \
 	fi
 
 mostro.docker.copy_dataset_and_results:
