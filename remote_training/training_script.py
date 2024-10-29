@@ -13,10 +13,6 @@ import yaml
 from sklearn.model_selection import KFold
 from tqdm import tqdm
 
-# This is a workaround to avoid Ultralytics trying to do multi-gpu training. Despite trying to set it as
-# an env var, it still tries to do multi-gpu training. This is a workaround to avoid that.
-# It's necessary to do this before importing ultralytics
-os.environ["RANK"] = "-1"
 import ultralytics.utils
 from ultralytics import YOLO
 from label_studio_sdk.converter import Converter
@@ -60,8 +56,6 @@ class TrainingScript:
     def run(self):
         if not self.use_mlflow:
             self._turn_off_mlflow_logging_on_yolo()
-        self._check_if_gpu_is_available()
-        self._prevent_multi_gpu_training()
 
         class_names, annotations = self._download_dataset_annotations()
         images = self._download_labeled_dataset_images()
@@ -305,7 +299,7 @@ class TrainingScript:
             epochs=self.epochs,
             imgsz=self.image_size,
             rect=(self.image_size[0] != self.image_size[1]),
-            device=self._get_device(),
+            device="cuda:0",
             project=str(self.training_results_path),
             name=model_name,
             **augmentations,
