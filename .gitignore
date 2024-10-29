@@ -15,6 +15,7 @@ dataset/
 config.toml
 local.toml
 remote.toml
+mostro.toml
 
 # Scripts downloads
 images_to_resize/

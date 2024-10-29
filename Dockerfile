@@ -13,13 +13,13 @@ RUN apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 && rm -rf 
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Copy files to run app
+# Copy repo files to run app
 COPY src/ src/
 COPY remote_training/ remote_training/
-COPY mostro.toml mostro.toml
 COPY config_example.toml config_example.toml
-COPY sa.json sa.json
 
-RUN pip3 install label-studio-sdk
+# Copy extra files that user has to add manually
+COPY mostro.toml mostro.toml
+COPY service_account.json service_account.json
 
 CMD ["python3", "src/cli.py", "-c", "mostro.toml", "--local"]
