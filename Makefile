@@ -48,3 +48,12 @@ mostro.docker.copy_dataset_and_results:
 		echo "Running with container_name: $(container_name)"; \
 		docker cp ${container_name}:/app/dataset/ .; \
     fi
+
+mostro.docker.rm_container:
+	@if [ -z "$(container_name)" ]; then \
+		echo "Error: CONTAINER_NAME parameter is missing. Please run this command like 'make mostro.docker.rm_container container_name=CONTAINER_NAME'"; \
+		exit 1; \
+	else \
+		echo "Running with container_name: $(container_name)"; \
+		docker rm ${container_name}; \
+    fi
