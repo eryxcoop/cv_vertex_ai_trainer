@@ -303,7 +303,7 @@ class TrainingScript:
             epochs=self.epochs,
             imgsz=self.image_size,
             rect=(self.image_size[0] != self.image_size[1]),
-            device="cuda:0",
+            device=self._get_device(),
             project=str(self.training_results_path),
             name=model_name,
             **augmentations,
