@@ -46,5 +46,5 @@ mostro.docker.copy_dataset_and_results:
 		exit 1; \
 	else \
 		echo "Running with container_name: $(container_name)"; \
-		docker cp ${container_name}:app/cv-vertex-ai-trainer/dataset/ .; \
+		docker cp ${container_name}:/app/dataset/ .; \
     fi
