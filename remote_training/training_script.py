@@ -11,6 +11,7 @@ import pandas as pd
 import torch
 import yaml
 from sklearn.model_selection import KFold
+from tqdm import tqdm
 
 # This is a workaround to avoid Ultralytics trying to do multi-gpu training. Despite trying to set it as
 # an env var, it still tries to do multi-gpu training. This is a workaround to avoid that.
@@ -59,8 +60,6 @@ class TrainingScript:
     def run(self):
         if not self.use_mlflow:
             self._turn_off_mlflow_logging_on_yolo()
-        self._check_if_gpu_is_available()
-        self._prevent_multi_gpu_training()
 
         class_names, annotations = self._download_dataset_annotations()
         images = self._download_labeled_dataset_images()
@@ -169,7 +168,7 @@ class TrainingScript:
                                        labeled_tasks))
 
         all_dataset_image_paths = []
-        for image_name in labeled_image_names:
+        for image_name in tqdm(labeled_image_names):
             source_image_path = self.source_images_directory / image_name
             destination_image_path = self.dataset_path / image_name
             all_dataset_image_paths.append(destination_image_path)
@@ -304,7 +303,7 @@ class TrainingScript:
             epochs=self.epochs,
             imgsz=self.image_size,
             rect=(self.image_size[0] != self.image_size[1]),
-            device=self._get_device(),
+            device="cuda:0",
             project=str(self.training_results_path),
             name=model_name,
             **augmentations,
@@ -317,9 +316,9 @@ class TrainingScript:
             "hsv_s": 0.7,
             "hsv_v": 0.4,
             "degrees": 4.0,
-            "translate": 0.1,
+            "translate": 0.2,
             "scale": 0.0,
-            "shear": 0.0,
+            "shear": 3.0,
             "perspective": 0.0,
             "flipud": 0.0,
             "fliplr": 0.0,
