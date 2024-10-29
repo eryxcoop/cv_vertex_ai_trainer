@@ -9,7 +9,6 @@ from pathlib import Path
 import mlflow
 import pandas as pd
 import torch
-import ultralytics.utils
 import yaml
 from sklearn.model_selection import KFold
 
@@ -17,6 +16,7 @@ from sklearn.model_selection import KFold
 # an env var, it still tries to do multi-gpu training. This is a workaround to avoid that.
 # It's necessary to do this before importing ultralytics
 os.environ["RANK"] = "-1"
+import ultralytics.utils
 from ultralytics import YOLO
 from label_studio_sdk.converter import Converter
 from label_studio_sdk import Client as LabelStudioClient
@@ -204,8 +204,7 @@ class TrainingScript:
             shutil.copy(image, datasets_path / folder_name / 'train' / "images" / image.name)
             shutil.copy(label, datasets_path / folder_name / 'train' / "labels" / label.name)
 
-        first_image = images[0]
-        first_label = annotations[0]
+        first_image, first_label = self._get_first_image_with_any_annotation(images, annotations)
         shutil.copy(first_image, datasets_path / folder_name / 'val' / "images" / first_image.name)
         shutil.copy(first_label, datasets_path / folder_name / 'val' / "labels" / first_label.name)
         return dataset_yaml
@@ -375,6 +374,12 @@ class TrainingScript:
     def _turn_off_mlflow_logging_on_yolo(self):
         # This is a hacky way to avoid ultralytics using mlflow logging when we don't want it
         ultralytics.utils.TESTS_RUNNING = True
+
+    def _get_first_image_with_any_annotation(self, images, annotations):
+        for image, label in zip(images, annotations):
+            with open(label, 'r') as file:
+                if len(file.read()) > 0:
+                    return image, label
 
 
 if __name__ == "__main__":
