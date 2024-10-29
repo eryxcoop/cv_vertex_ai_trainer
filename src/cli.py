@@ -8,7 +8,7 @@ import toml
 from remote_training.training_script import TrainingScript
 from src.training_job import TrainingJob
 
-
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'sa.json'
 class CLI:
     def __init__(self) -> None:
         self.parser = argparse.ArgumentParser(
