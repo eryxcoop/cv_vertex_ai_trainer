@@ -206,8 +206,7 @@ class TrainingScript:
             shutil.copy(image, datasets_path / folder_name / 'train' / "images" / image.name)
             shutil.copy(label, datasets_path / folder_name / 'train' / "labels" / label.name)
 
-        first_image = images[0]
-        first_label = annotations[0]
+        first_image, first_label = self._get_first_image_with_any_annotation(images, annotations)
         shutil.copy(first_image, datasets_path / folder_name / 'val' / "images" / first_image.name)
         shutil.copy(first_label, datasets_path / folder_name / 'val' / "labels" / first_label.name)
         return dataset_yaml
@@ -377,6 +376,12 @@ class TrainingScript:
     def _turn_off_mlflow_logging_on_yolo(self):
         # This is a hacky way to avoid ultralytics using mlflow logging when we don't want it
         ultralytics.utils.TESTS_RUNNING = True
+
+    def _get_first_image_with_any_annotation(self, images, annotations):
+        for image, label in zip(images, annotations):
+            with open(label, 'r') as file:
+                if len(file.read()) > 0:
+                    return image, label
 
 
 if __name__ == "__main__":
