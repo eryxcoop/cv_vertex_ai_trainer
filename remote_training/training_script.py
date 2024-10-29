@@ -13,6 +13,10 @@ import yaml
 from sklearn.model_selection import KFold
 from tqdm import tqdm
 
+# This is a workaround to avoid Ultralytics trying to do multi-gpu training. Despite trying to set it as
+# an env var, it still tries to do multi-gpu training. This is a workaround to avoid that.
+# It's necessary to do this before importing ultralytics
+os.environ["RANK"] = "-1"
 import ultralytics.utils
 from ultralytics import YOLO
 from label_studio_sdk.converter import Converter
