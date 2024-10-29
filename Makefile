@@ -55,5 +55,6 @@ mostro.docker.rm_container:
 		exit 1; \
 	else \
 		echo "Running with container_name: $(container_name)"; \
+		docker stop ${container_name}; \
 		docker rm ${container_name}; \
     fi
