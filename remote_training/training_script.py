@@ -381,6 +381,12 @@ class TrainingScript:
         # This is a hacky way to avoid ultralytics using mlflow logging when we don't want it
         ultralytics.utils.TESTS_RUNNING = True
 
+    def _get_first_image_with_any_annotation(self, images, annotations):
+        for image, label in zip(images, annotations):
+            with open(label, 'r') as file:
+                if len(file.read()) > 0:
+                    return image, label
+
 
 if __name__ == "__main__":
     training_script = TrainingScript()
