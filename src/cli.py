@@ -92,13 +92,18 @@ class CLI:
         )
         train_job.run()
 
-    def _run_local(self, _config, training_config):
+    def _run_local(self, config, training_config):
         env_vars = self._load_environment_variables(training_config)
         for key, value in env_vars.items():
             os.environ[key] = str(value)
 
+        self._configure_service_account_if_neccesary(config)
         train_script = TrainingScript()
         train_script.run()
+
+    def _configure_service_account_if_neccesary(self, config):
+        if config['google_cloud'].get('use_service_account', False):
+            os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = config['google_cloud']['service_account']
 
     def _load_environment_variables(self, training_config):
         # This code is repeated with #_load_environment_variables in TrainingJob

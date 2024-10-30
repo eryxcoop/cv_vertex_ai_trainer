@@ -1,0 +1,20 @@
+
+{
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "runArgs": [
+    "--device",
+    "nvidia.com/gpu=all"
+  ],
+  "customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.python",
+				"ms-python.vscode-pylance"
+			]
+		}
+	},
+  "postCreateCommand": "pip3 install -r /workspaces/cv-vertex-ai-trainer/requirements.txt"
+}
